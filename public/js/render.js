@@ -67,7 +67,9 @@ export class Renderer {
     this.canvas = canvas;
     this.time = 0;
     this.shake = 0;
-    this.kick = 0;
+    // Recoil amount. Must not be called `kick`: that name is the method below, and an own property
+    // in the constructor shadows the prototype method.
+    this.recoil = 0;
     this.players = new Map();
     this.loot = new Map();
     this.tracers = [];
@@ -410,7 +412,7 @@ export class Renderer {
   }
 
   kick(n = 1) {
-    this.kick = Math.min(1.4, this.kick + 0.5 * n);
+    this.recoil = Math.min(1.4, this.recoil + 0.5 * n);
     this.muzzle.visible = true;
     this.muzzleTimer = 0.05;
   }
@@ -630,12 +632,12 @@ export class Renderer {
     this.gunBarrel.position.z = -0.45 - look.length * 0.42;
     this.gunBody.scale.set(look.thick / 0.085 * 0.85, 1, 1);
 
-    this.kick = Math.max(0, this.kick - dt * 9);
-    this.gunGroup.position.z = -0.3 + this.kick * 0.07;
-    this.gunGroup.rotation.x = this.kick * 0.28;
+    this.recoil = Math.max(0, this.recoil - dt * 9);
+    this.gunGroup.position.z = -0.3 + this.recoil * 0.07;
+    this.gunGroup.rotation.x = this.recoil * 0.28;
     // Subtle idle sway so the weapon doesn't look pasted on.
     this.gunGroup.position.x = 0.23 + Math.sin(this.time * 1.1) * 0.004;
-    this.gunGroup.position.y = -0.19 + Math.sin(this.time * 1.7) * 0.004 - Math.abs(this.kick) * 0.01;
+    this.gunGroup.position.y = -0.19 + Math.sin(this.time * 1.7) * 0.004 - Math.abs(this.recoil) * 0.01;
 
     this.muzzleTimer -= dt;
     if (this.muzzleTimer <= 0) this.muzzle.visible = false;

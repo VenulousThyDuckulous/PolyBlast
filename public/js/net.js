@@ -128,7 +128,15 @@ export class Net {
           this.push(msg);
           this.you = msg.you;
           this.onState?.(msg);
-          if (msg.events?.length) this.onEvents?.(msg.events);
+          if (msg.events?.length) {
+            // A throw here used to escape the socket handler and stop the client dead. One bad event
+            // should cost one effect, not the rest of the match.
+            try {
+              this.onEvents?.(msg.events);
+            } catch (err) {
+              console.error('[polyblast] event handler failed', err);
+            }
+          }
           return;
         }
         if (msg.t === 'world') {
