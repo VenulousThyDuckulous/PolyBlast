@@ -45,7 +45,7 @@ Node server, either locally or somewhere that can run it.
 
 ### A free domain with HTTPS
 
-The short version: **`polyblast.is-a.dev`** — free, no card, and HTTPS comes from GitHub Pages itself.
+The short version: **`playpolyblast.is-a.dev`** — free, no card, and HTTPS comes from GitHub Pages itself.
 
 Every asset in the build is referenced relatively, so the game already runs at a domain root; the
 same bundle serves `/PolyBlast/`, `/`, or anything else without changes. What a domain needs is DNS
@@ -53,7 +53,7 @@ and a published `CNAME` file.
 
 **1. Claim the name.** [is-a.dev](https://www.is-a.dev) hands out subdomains for software projects in
 exchange for a pull request to [is-a-dev/register](https://github.com/is-a-dev/register) — there is
-no account and no signup form, just a file called `domains/polyblast.json`:
+no account and no signup form, just a file called `domains/playpolyblast.json`:
 
 ```json
 {
@@ -66,10 +66,17 @@ A volunteer merges it, usually within a day, and the record appears minutes late
 DNS** — the CNAME is created for you, so there is nothing to configure at a registrar. Note the
 `github.io` host has no repo name in it.
 
+**DNS cannot tell you whether a name is free.** is-a.dev answers for every name under it, so an
+unregistered subdomain still resolves (to Cloudflare) exactly like a registered one — which is why
+"is it taken?" checkers and `nslookup` both lie here. The registry is the only authority: if
+`domains/<name>.json` is absent from [the repo](https://github.com/is-a-dev/register), the name is
+free. `polyblast.is-a.dev` is still unclaimed by that test, and any of `playpolyblast`, `polyblaster`,
+`polyblast-game` or `blastroyale` can be swapped in with the command below.
+
 **2. Configure it here.**
 
 ```bash
-npm run domain polyblast.is-a.dev
+npm run domain playpolyblast.is-a.dev
 ```
 
 That writes `CNAME` in the repo root and prints the records and the remaining steps. Change or drop
@@ -86,7 +93,7 @@ as soon as the domain resolves and uploads it automatically; it can take up to 2
 available. Nothing in the repo decides this — it is repository configuration, like the domain itself.
 
 **Verify the domain while you are there.** GitHub offers a TXT record showing you control the name;
-is-a.dev accepts it in a second PR, as `domains/_github-pages-challenge-venulousthyduckulous.polyblast.json`.
+is-a.dev accepts it in a second PR, as `domains/_github-pages-challenge-venulousthyduckulous.playpolyblast.json`.
 It is what stops someone else claiming the same name on GitHub if the DNS record ever lapses.
 
 Other free options, and why they are second choice: [js.org](https://js.org) is free and fast but
