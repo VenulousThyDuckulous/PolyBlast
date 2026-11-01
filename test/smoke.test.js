@@ -21,6 +21,7 @@ import {
   fillWithBots,
   botCount,
   alivePlayers,
+  weaponBox,
 } from '../server/sim.js';
 import { updateBots } from '../server/bots.js';
 import { TICK_DT, PLAYER } from '../server/config.js';
@@ -161,6 +162,98 @@ test('sprint is faster than a walk', () => {
   assert.ok(ran > walked, `sprint (${ran.toFixed(2)}) should beat walk (${walked.toFixed(2)})`);
 });
 
+test('sprinting burns stamina, and an empty bar stops the sprint', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  p.pos = { x: 0, y: 0, z: 40 };
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true });
+  advance(match, 0.6);
+  assert.ok(p.stamina < PLAYER.staminaMax, `stamina should drain, ${p.stamina}`);
+  assert.equal(p.sprinting, true, 'sprint running');
+
+  // Keep the key down: the sprint has to give out on its own.
+  let emptiedAt = -1;
+  for (let i = 0; i < 400 && emptiedAt < 0; i++) {
+    advance(match, 0.05);
+    if (p.stamina <= 0.01) emptiedAt = i;
+  }
+  assert.ok(emptiedAt > 0, 'stamina ran out while sprinting');
+  assert.equal(p.sprinting, false, 'cannot keep sprinting on an empty bar');
+
+  // Still holding the key must not restart the sprint (no stuttering between speeds).
+  advance(match, 0.4);
+  assert.equal(p.sprinting, false, 'holding the key does not restart an exhausted sprint');
+
+  // Letting go and waiting brings it back.
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 0, sprint: false });
+  advance(match, 2.5);
+  assert.ok(p.stamina > PLAYER.staminaSprintMin, `stamina regenerated, ${p.stamina}`);
+});
+
+test('a slide launches faster than a sprint and drops the hitbox', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  p.pos = { x: 0, y: 0, z: 40 };
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true });
+  advance(match, 0.8);
+  assert.equal(p.sprinting, true, 'sprinting before the slide');
+  const runSpeed = Math.hypot(p.vel.x, p.vel.z);
+
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: false, slide: true });
+  advance(match, 0.05);
+  assert.ok(p.slide, 'slide started');
+  const slideSpeed = Math.hypot(p.vel.x, p.vel.z);
+  assert.ok(slideSpeed > runSpeed, `slide (${slideSpeed.toFixed(2)}) should launch faster than a run (${runSpeed.toFixed(2)})`);
+  assert.ok(weaponBox(p).height < PLAYER.height, 'hitbox is lower while sliding');
+  assert.equal(buildSnapshot(match).players.find((s) => s.id === 'p0').sl, 1, 'snapshot flags the slide');
+});
+
+test('slides are capped in duration and cannot be chained', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  p.pos = { x: 0, y: 0, z: 40 };
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true });
+  advance(match, 0.8);
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, slide: true });
+  advance(match, 0.05);
+  assert.ok(p.slide, 'first slide running');
+
+  // Holding the key does not extend it.
+  advance(match, PLAYER.slideDuration + 0.1);
+  assert.equal(p.slide, null, 'slide ends on its own');
+  assert.ok(p.slideCd > 0, 'cooldown is running');
+
+  // Still holding the key: it must not start another slide on its own.
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, slide: true });
+  advance(match, 0.3);
+  assert.equal(p.slide, null, 'holding the key does not chain another slide');
+
+  // Releasing and pressing again once the cooldown has run out is allowed.
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, slide: false });
+  advance(match, 1.2);
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, slide: true });
+  advance(match, 0.1);
+  assert.ok(p.slide, 'a fresh press slides again after the cooldown');
+});
+
+test('the number keys select the slot they are labelled with', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  givePistol(p);
+  p.slots[1] = { kind: 'smg', mag: 32 };
+  p.slots[2] = { kind: 'knife', mag: 0 };
+
+  setInput(match, 'p0', { slot: 2 });
+  advance(match, 0.1);
+  assert.equal(p.slot, 1, 'key 2 picks the second slot');
+  setInput(match, 'p0', { slot: 3 });
+  advance(match, 0.1);
+  assert.equal(p.slot, 2, 'key 3 draws the knife');
+  setInput(match, 'p0', { slot: 1 });
+  advance(match, 0.1);
+  assert.equal(p.slot, 0, 'key 1 picks the first slot');
+});
+
 test('walls stop movement', () => {
   const match = makeLiveMatch(2);
   match.world.boxes.push({ minX: -6, maxX: 6, minZ: 9, maxZ: 10, height: 4, kind: 'wall' });
@@ -269,6 +362,115 @@ test('killing the last opponent ends the match and reports the winner', () => {
   assert.equal(shooter.kills, 1);
   const killEvent = buildSnapshot(match).events.find((e) => e.type === 'kill');
   assert.ok(killEvent, 'kill event for the feed');
+});
+
+console.log('\nmelee');
+
+/** Line the two players up: attacker at the origin facing -Z, victim straight ahead. */
+function faceOff(gap = 1.3) {
+  const match = makeLiveMatch(2);
+  const attacker = match.players.get('p0');
+  const victim = match.players.get('p1');
+  attacker.pos = { x: 0, y: 0, z: 0 };
+  victim.pos = { x: 0, y: 0, z: -gap };
+  attacker.yaw = 0;
+  attacker.pitch = 0;
+  attacker.vel = { x: 0, y: 0, z: 0 };
+  victim.vel = { x: 0, y: 0, z: 0 };
+  victim.yaw = 0; // facing -Z, i.e. away from the attacker
+  attacker.slot = 2; // knife
+  attacker.fireCd = 0;
+  return { match, attacker, victim };
+}
+
+test('the knife is carried in its own slot and needs no ammo', () => {
+  const { match, attacker } = faceOff();
+  assert.equal(attacker.slots.length, 3, 'two gun slots plus melee');
+  assert.equal(attacker.slots[2].kind, 'knife');
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.5);
+  assert.equal(attacker.reload, null, 'a knife never reloads');
+  assert.equal(attacker.slots[2].mag, 0, 'and never spends ammo');
+});
+
+test('a knife swing damages what is in front of it, once per cooldown', () => {
+  const { match, attacker, victim } = faceOff(1.3);
+  // Facing the attacker, so this exercises the plain melee hit rather than the takedown below.
+  victim.yaw = Math.PI;
+  const before = victim.hp;
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.1);
+  assert.ok(victim.hp < before, `knife should connect, hp=${victim.hp}`);
+  const afterFirst = victim.hp;
+  assert.ok(afterFirst > 0, 'one swing is not a kill from full health');
+
+  advance(match, 0.2);
+  assert.equal(victim.hp, afterFirst, 'the cooldown blocks a second hit in the same window');
+
+  advance(match, 0.5);
+  assert.ok(victim.hp < afterFirst, 'once the cooldown ends the next swing lands');
+});
+
+test('the knife cannot reach past its range', () => {
+  const { match, victim } = faceOff(4.5);
+  const before = victim.hp;
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.5);
+  assert.equal(victim.hp, before, 'swinging at air deals no damage');
+});
+
+test('picking up guns never displaces the knife', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  p.pos = { x: 0, y: 0, z: 0 };
+  for (const [i, kind] of ['rifle', 'smg'].entries()) {
+    match.loot.push({ id: 500 + i, kind: 'weapon', weapon: kind, mag: 10, x: 0.2, z: 0 });
+    setInput(match, 'p0', { interact: true });
+    advance(match, 0.1);
+  }
+  assert.equal(p.slots.filter((s, i) => i < 2 && s).length, 2, 'both gun slots filled');
+  assert.equal(p.slots[2].kind, 'knife', 'the knife is still in the melee slot');
+});
+
+test('a knife in the back of an unaware opponent is an instant takedown', () => {
+  const { match, victim } = faceOff(1.2);
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.05);
+  assert.equal(victim.alive, false, 'takedown eliminates instantly');
+  const finisher = buildSnapshot(match).events.find((e) => e.type === 'finisher');
+  assert.ok(finisher, 'finisher event for the HUD');
+  assert.equal(finisher.by, 'p0');
+  assert.equal(finisher.id, 'p1');
+});
+
+test('facing the attacker turns a takedown back into a normal hit', () => {
+  const { match, victim } = faceOff(1.3);
+  victim.yaw = Math.PI; // now looking straight at the attacker
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.1);
+  assert.equal(victim.alive, true, 'no takedown from the front');
+  assert.ok(victim.hp < PLAYER.maxHp, 'but the swing still hurts');
+});
+
+test('an opponent who just shot you does not count as unaware', () => {
+  const { match, attacker, victim } = faceOff(1.3);
+  // The victim fired at the attacker a moment ago: aware, even with their back turned.
+  victim.lastAttackId = attacker.id;
+  victim.lastFireAt = match.time;
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true });
+  advance(match, 0.1);
+  assert.equal(victim.alive, true, 'no instant takedown on someone already fighting you');
+  assert.ok(victim.hp < PLAYER.maxHp, 'normal knife damage instead');
+});
+
+test('the self packet carries stamina, slide and melee state', () => {
+  const { match } = faceOff(1.3);
+  const self = buildSelf(match, 'p0');
+  assert.equal(self.staminaMax, PLAYER.staminaMax);
+  assert.equal(typeof self.stamina, 'number');
+  assert.equal(self.melee, true, 'knife reads as melee');
+  assert.equal(self.sliding, false);
+  assert.ok(self.slots.length === 3);
 });
 
 console.log('\nloot');

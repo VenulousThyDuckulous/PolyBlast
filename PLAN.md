@@ -80,8 +80,8 @@ main.js    screens + game loop         index.js  static files + ws upgrade
 
 ## Controls
 
-`WASD` move · mouse look · left click fire · `R` reload · `E` pick up · `1`/`2` weapon slot ·
-`Shift` sprint · `Space` jump · `Esc` release mouse.
+`WASD` move · mouse look · left click fire · `R` reload · `E` pick up · `1`/`2` gun slots ·
+`3` knife · `Shift` sprint · `Ctrl`/`C` slide · `Space` jump · `Esc` release mouse.
 
 ## Files
 

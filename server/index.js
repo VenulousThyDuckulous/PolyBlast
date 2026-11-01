@@ -24,6 +24,7 @@ import {
   ZONE_PHASES,
   ZONE_START_RADIUS,
   PLAYER,
+  MELEE,
   MATCH,
   BOT_NAMES,
 } from './config.js';
@@ -138,6 +139,7 @@ function addHuman(ws, name, avatar) {
         snapshotRate: SNAPSHOT_RATE,
         arenaHalf: ARENA_HALF,
         player: PLAYER,
+        melee: MELEE,
         match: { countdown: MATCH.countdown, overDuration: MATCH.overDuration, pickupRadius: MATCH.pickupRadius },
         weapons: WEAPONS,
         zonePhases: ZONE_PHASES,

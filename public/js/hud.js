@@ -10,10 +10,15 @@ export class Hud {
     this.root = $('hud');
     this.hpFill = $('hp-fill');
     this.armorFill = $('armor-fill');
+    this.staminaFill = $('stamina-fill');
     this.hpText = $('hp-text');
     this.killsText = $('kills-text');
     this.magEl = $('ammo-mag');
     this.reserveEl = $('ammo-reserve');
+    this.ammoSep = $('ammo-sep');
+    this.finisherPrompt = $('finisher-prompt');
+    this.finisherName = $('finisher-name');
+    this.flashEl = $('flash');
     this.weaponName = $('weapon-name');
     this.slots = [...document.querySelectorAll('#slots .slot')];
     this.reloadBar = $('reload-bar');
@@ -68,6 +73,13 @@ export class Hud {
     this.armorFill.style.width = `${Math.max(0, Math.min(100, (you.armor / rules.maxArmor) * 100))}%`;
     this.killsText.textContent = `${you.kills} kill${you.kills === 1 ? '' : 's'}`;
 
+    // ---- stamina: the pool sprinting and sliding both draw from
+    const stamPct = Math.max(0, Math.min(100, (you.stamina / rules.staminaMax) * 100));
+    this.staminaFill.style.width = `${stamPct}%`;
+    // Below the sprint threshold the bar turns amber: you can keep running but not start again.
+    this.staminaFill.classList.toggle('spent', you.stamina <= rules.staminaSprintMin);
+    this.staminaFill.classList.toggle('draining', !!you.sprinting || !!you.sliding);
+
     // ---- weapon
     const slots = you.slots || [null, null];
     this.slots.forEach((el, i) => {
@@ -78,9 +90,12 @@ export class Hud {
       el.classList.toggle('empty', !s);
     });
     this.weaponName.textContent = you.held ? view.config.weapons[you.held].label : 'Unarmed';
-    this.magEl.textContent = String(you.mag);
-    this.reserveEl.textContent = String(you.reserve);
-    this.magEl.style.color = you.mag === 0 ? 'var(--danger)' : '';
+    // The knife has no magazine: the ammo readout steps aside rather than showing a false zero.
+    const melee = !!you.melee;
+    this.magEl.textContent = melee ? '—' : String(you.mag);
+    this.reserveEl.textContent = melee ? '—' : String(you.reserve);
+    this.ammoSep.classList.toggle('hidden', melee);
+    this.magEl.style.color = !melee && you.mag === 0 ? 'var(--danger)' : '';
 
     if (you.reloading) {
       this.reloadBar.classList.add('active');
@@ -115,6 +130,14 @@ export class Hud {
       this.promptText.textContent = view.nearbyLoot;
     } else {
       this.prompt.classList.add('hidden');
+    }
+
+    // ---- stealth finisher availability
+    if (view.finisher) {
+      this.finisherPrompt.classList.remove('hidden');
+      this.finisherName.textContent = view.finisher;
+    } else {
+      this.finisherPrompt.classList.add('hidden');
     }
 
     // ---- countdown banner
@@ -174,6 +197,21 @@ export class Hud {
   hideResults() {
     this.resultsShown = false;
     this.results.classList.add('hidden');
+  }
+
+  /** Takedown feedback: a name, a flash and nothing else to worry about. */
+  finisher(name) {
+    this.banner(`SILENT TAKEDOWN · ${name}`, 1800);
+    this.flash();
+  }
+
+  /** Brief white pulse for the moment a finisher lands. */
+  flash() {
+    if (!this.flashEl) return;
+    this.flashEl.classList.remove('show');
+    // Force a reflow so back-to-back takedowns each restart the animation.
+    void this.flashEl.offsetWidth;
+    this.flashEl.classList.add('show');
   }
 
   hitmarker(kill = false) {

@@ -136,4 +136,39 @@ export class Sfx {
   step() {
     this.noise({ gain: 0.06, freq: 900, type: 'lowpass', decay: 0.05, duration: 0.06 });
   }
+
+  /** Sprint footsteps: heavier and faster than a walk, so sprinting sounds committed. */
+  sprintStep() {
+    this.noise({ gain: 0.085, freq: 1150, type: 'lowpass', decay: 0.055, duration: 0.07 });
+  }
+
+  /** A slide: one scrape of boots on ground, fading with distance. */
+  slide(distance = 0) {
+    if (distance > 46) return;
+    const falloff = Math.max(0.1, 1 - distance / 50);
+    this.noise({ gain: 0.26 * falloff, freq: 1250, type: 'lowpass', decay: 0.26, duration: 0.3 });
+    this.tone({ freq: 150, endFreq: 70, duration: 0.22, gain: 0.07 * falloff, type: 'sine' });
+  }
+
+  /** Knife whoosh. Your own swing is louder than someone else's. */
+  swing(distance = 0, own = false) {
+    if (!own && distance > 38) return;
+    const falloff = own ? 1 : Math.max(0.12, 1 - distance / 42);
+    this.noise({ gain: 0.18 * falloff, freq: 2900, type: 'highpass', decay: 0.08, duration: 0.09 });
+    if (own) this.tone({ freq: 380, endFreq: 620, duration: 0.07, gain: 0.05, type: 'triangle' });
+  }
+
+  /** Stamina ran out: a short, dry breath rather than a UI beep. */
+  exhausted() {
+    this.noise({ gain: 0.12, freq: 620, type: 'lowpass', decay: 0.2, duration: 0.22 });
+    this.tone({ freq: 210, endFreq: 140, duration: 0.16, gain: 0.06, type: 'sine' });
+  }
+
+  /** The takedown sting: a low hit and a rising two-note sparkle. */
+  finisher() {
+    this.tone({ freq: 190, endFreq: 85, duration: 0.16, gain: 0.22, type: 'sawtooth' });
+    this.noise({ gain: 0.2, freq: 800, decay: 0.16, duration: 0.18 });
+    this.tone({ freq: 620, duration: 0.12, gain: 0.14, type: 'triangle', delay: 0.07 });
+    this.tone({ freq: 930, duration: 0.18, gain: 0.12, type: 'triangle', delay: 0.16 });
+  }
 }

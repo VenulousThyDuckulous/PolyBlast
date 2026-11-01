@@ -9,12 +9,13 @@ import {
   WEAPONS,
   ITEMS,
   PLAYER,
+  MELEE,
   ZONE_START_RADIUS,
   ZONE_PHASES,
   MATCH,
 } from './config.js';
 import { SIM } from './config.js';
-import { PHASE, SLOTS, clamp, clamp01, lerp, aimDir } from '../shared/protocol.js';
+import { PHASE, SLOTS, MELEE_SLOT, GUN_SLOTS, clamp, clamp01, lerp, aimDir, angleDelta } from '../shared/protocol.js';
 import { DEFAULT_AVATAR, HATS, avatarLook, sanitizeAvatar } from '../shared/avatar.js';
 import {
   generateWorld,
@@ -37,7 +38,15 @@ const EMPTY_INPUT = () => ({
   sprint: false,
   jump: false,
   fire: false,
+  slide: false,
 });
+
+/** Two gun slots and a knife that is always in the third. */
+function freshSlots() {
+  const slots = new Array(SLOTS).fill(null);
+  slots[MELEE_SLOT] = { kind: 'knife', mag: 0 };
+  return slots;
+}
 
 export function createMatch(seed = Math.floor(Math.random() * 1e9), matchNumber = 0) {
   const match = {
@@ -106,9 +115,9 @@ export function addPlayer(match, { id, name, bot = false, avatar = DEFAULT_AVATA
     alive: true,
     kills: 0,
     damageDealt: 0,
-    slots: new Array(SLOTS).fill(null),
+    slots: freshSlots(),
     slot: 0,
-    reserve: { pistol: 0, smg: 0, shotgun: 0, rifle: 0 },
+    reserve: { pistol: 0, smg: 0, shotgun: 0, rifle: 0, knife: 0 },
     fireCd: 0,
     reload: null,
     spawnShield: 0,
@@ -117,6 +126,18 @@ export function addPlayer(match, { id, name, bot = false, avatar = DEFAULT_AVATA
     input: EMPTY_INPUT(),
     pending: { interact: false, reload: false, slot: 0 },
     killStreak: 0,
+    // ---- movement state
+    stamina: PLAYER.staminaMax,
+    staminaDelay: 0,
+    sprinting: false,
+    sprintLock: false,
+    slide: null,
+    slideCd: 0,
+    slideLock: false,
+    // ---- combat bookkeeping used by the stealth finisher
+    lastFireAt: -99,
+    lastAttackId: null,
+    finisherAt: -99,
     thinkTimer: 0,
     botState: null,
     joinedAt: match.time,
@@ -161,14 +182,21 @@ export function getHeld(p) {
   return p.slots[p.slot] || null;
 }
 
-function weaponBox(p) {
+/** Hitbox used for shots against a player. Exported so the tests can check the slide profile. */
+export function weaponBox(p) {
   return {
     minX: p.pos.x - PLAYER.radius,
     maxX: p.pos.x + PLAYER.radius,
     minZ: p.pos.z - PLAYER.radius,
     maxZ: p.pos.z + PLAYER.radius,
-    height: PLAYER.height,
+    // Sliding genuinely shrinks the target: shots aimed at a standing chest sail over.
+    height: p.slide ? PLAYER.slideHeight : PLAYER.height,
   };
+}
+
+/** Eye height, which drops with the hitbox while sliding. */
+function eyeHeight(p) {
+  return p.slide ? PLAYER.slideEye : PLAYER.eye;
 }
 
 export function alivePlayers(match) {
@@ -193,6 +221,7 @@ export function setInput(match, id, raw) {
   p.input.sprint = !!raw.sprint;
   p.input.jump = !!raw.jump;
   p.input.fire = !!raw.fire;
+  p.input.slide = !!raw.slide;
   // Edge-triggered actions are latched so a press can't fall between ticks.
   if (raw.interact) p.pending.interact = true;
   if (raw.reload) p.pending.reload = true;
@@ -281,13 +310,22 @@ function startLive(match) {
     p.damageDealt = 0;
     p.killerId = null;
     p.lastAttacker = null;
-    p.slots = new Array(SLOTS).fill(null);
+    p.slots = freshSlots();
     p.slot = 0;
-    p.reserve = { pistol: 0, smg: 0, shotgun: 0, rifle: 0 };
+    p.reserve = { pistol: 0, smg: 0, shotgun: 0, rifle: 0, knife: 0 };
     p.reload = null;
     p.fireCd = 0;
     p.spawnShield = PLAYER.spawnShield;
     p.killStreak = 0;
+    p.stamina = PLAYER.staminaMax;
+    p.staminaDelay = 0;
+    p.sprinting = false;
+    p.sprintLock = false;
+    p.slide = null;
+    p.slideCd = 0;
+    p.slideLock = false;
+    p.lastFireAt = -99;
+    p.lastAttackId = null;
   }
 }
 
@@ -312,10 +350,16 @@ function resetMatch(match) {
     p.alive = true;
     p.kills = 0;
     p.killerId = null;
-    p.slots = new Array(SLOTS).fill(null);
+    p.slots = freshSlots();
     p.slot = 0;
-    p.reserve = { pistol: 0, smg: 0, shotgun: 0, rifle: 0 };
+    p.reserve = { pistol: 0, smg: 0, shotgun: 0, rifle: 0, knife: 0 };
     p.spawnShield = 0;
+    p.stamina = PLAYER.staminaMax;
+    p.sprinting = false;
+    p.sprintLock = false;
+    p.slide = null;
+    p.slideCd = 0;
+    p.slideLock = false;
     const s = findSpawn(match);
     p.pos = { x: s.x, y: 0, z: s.z };
     p.vel = { x: 0, y: 0, z: 0 };
@@ -407,9 +451,10 @@ function stepPlayers(match, dt) {
 
     if (p.reload && match.time >= p.reload.endsAt) finishReload(p);
 
-    if (p.pending.slot && p.pending.slot !== p.slot) {
-      const target = p.pending.slot;
-      if (p.slots[target]) {
+    // Slot ids travel as 1-based numbers (what the HUD and the number keys say) and are indexes here.
+    if (p.pending.slot) {
+      const target = p.pending.slot - 1;
+      if (target !== p.slot && p.slots[target]) {
         p.slot = target;
         p.reload = null;
         p.fireCd = Math.max(p.fireCd, 0.22);
@@ -423,8 +468,10 @@ function stepPlayers(match, dt) {
 
     // Firing an empty gun should always start the reload, even mid-cooldown.
     if (p.input.fire) {
+      // Firing breaks the slide but keeps the speed it generated, so slide -> shoot flows.
+      endSlide(p);
       const held = getHeld(p);
-      if (held && held.mag <= 0) startReload(match, p);
+      if (held && !WEAPONS[held.kind].melee && held.mag <= 0) startReload(match, p);
       else tryFire(match, p);
     }
 
@@ -434,13 +481,73 @@ function stepPlayers(match, dt) {
   }
 }
 
+/** End a slide. The lock means the same held key cannot start another one: press again to slide. */
+function endSlide(p) {
+  if (!p.slide) return;
+  p.slide = null;
+  p.slideLock = true;
+}
+
+/** Kick off a slide: a burst of momentum along the current heading, paid for with stamina. */
+function startSlide(match, p) {
+  const speed = Math.hypot(p.vel.x, p.vel.z);
+  const hasVelocity = speed > 0.001;
+  p.slide = {
+    endsAt: match.time + PLAYER.slideDuration,
+    duration: PLAYER.slideDuration,
+    dx: hasVelocity ? p.vel.x / speed : -Math.sin(p.yaw),
+    dz: hasVelocity ? p.vel.z / speed : -Math.cos(p.yaw),
+    speed: Math.max(PLAYER.slideSpeed, speed),
+  };
+  p.stamina = Math.max(0, p.stamina - PLAYER.slideStamina);
+  p.staminaDelay = PLAYER.staminaRegenDelay;
+  // Cooldown covers the slide itself plus the recovery window, so it cannot be chained forever.
+  p.slideCd = PLAYER.slideDuration + PLAYER.slideCooldown;
+  match.events.push({ type: 'slide', id: p.id, x: round2(p.pos.x), z: round2(p.pos.z) });
+}
+
 function movePlayer(match, p, dt) {
   const inp = p.input;
   p.yaw = inp.yaw;
   p.pitch = clamp(inp.pitch, -1.45, 1.45);
 
-  const sprinting = inp.sprint && !inp.fire;
-  const speed = sprinting ? PLAYER.sprintSpeed : PLAYER.speed;
+  p.slideCd = Math.max(0, p.slideCd - dt);
+  p.staminaDelay = Math.max(0, p.staminaDelay - dt);
+  if (!inp.slide) p.slideLock = false;
+
+  const speedNow = Math.hypot(p.vel.x, p.vel.z);
+  const wantsMove = Math.hypot(inp.mx, inp.mz) > 0.1;
+
+  // ---- slide -------------------------------------------------------------
+  if (p.slide && (match.time >= p.slide.endsAt || (inp.jump && p.onGround))) endSlide(p);
+  if (
+    !p.slide &&
+    !p.slideLock &&
+    inp.slide &&
+    p.onGround &&
+    p.slideCd <= 0 &&
+    !inp.fire &&
+    p.stamina >= PLAYER.slideStamina &&
+    speedNow >= PLAYER.slideMinSpeed
+  ) {
+    startSlide(match, p);
+  }
+
+  // ---- sprint ------------------------------------------------------------
+  // Starting a sprint needs headroom on the bar; continuing one only needs stamina left. Running
+  // dry also latches until the key is released, so a held Shift cannot stutter between speeds.
+  if (!inp.sprint) p.sprintLock = false;
+  else if (p.stamina <= 0) p.sprintLock = true;
+  const canSustain =
+    !p.sprintLock && (p.sprinting ? p.stamina > 0 : p.stamina > PLAYER.staminaSprintMin);
+  const sprinting = !p.slide && inp.sprint && wantsMove && !inp.fire && canSustain;
+  p.sprinting = sprinting;
+  if (sprinting) {
+    p.stamina = Math.max(0, p.stamina - PLAYER.staminaDrain * dt);
+    p.staminaDelay = PLAYER.staminaRegenDelay;
+  } else if (!p.slide && p.staminaDelay <= 0) {
+    p.stamina = Math.min(PLAYER.staminaMax, p.stamina + PLAYER.staminaRegen * dt);
+  }
 
   const fx = -Math.sin(p.yaw);
   const fz = -Math.cos(p.yaw);
@@ -455,10 +562,33 @@ function movePlayer(match, p, dt) {
     wz /= len;
   }
 
-  const accel = p.pos.y <= 0.01 ? PLAYER.groundAccel : PLAYER.airAccel;
-  const blend = Math.min(1, accel * dt);
-  p.vel.x += (wx * speed - p.vel.x) * blend;
-  p.vel.z += (wz * speed - p.vel.z) * blend;
+  if (p.slide) {
+    // A slide keeps the momentum it was launched with; steering is a light touch, not free turning.
+    const t = clamp01(1 - (p.slide.endsAt - match.time) / p.slide.duration);
+    if (len > 0.1) {
+      const current = Math.atan2(-p.slide.dx, -p.slide.dz);
+      const desired = Math.atan2(-wx, -wz);
+      const turned = current + clamp(angleDelta(current, desired), -PLAYER.slideTurn * dt, PLAYER.slideTurn * dt);
+      p.slide.dx = -Math.sin(turned);
+      p.slide.dz = -Math.cos(turned);
+    }
+    const target = lerp(p.slide.speed, PLAYER.slideEndSpeed, t);
+    p.vel.x = p.slide.dx * target;
+    p.vel.z = p.slide.dz * target;
+  } else {
+    // Smooth ramp on the way in, smooth braking on the way out.
+    const targetSpeed = sprinting ? PLAYER.sprintSpeed : PLAYER.speed;
+    const accel = p.pos.y <= 0.01
+      ? wantsMove
+        ? sprinting
+          ? PLAYER.sprintAccel
+          : PLAYER.groundAccel
+        : PLAYER.groundFriction
+      : PLAYER.airAccel;
+    const blend = Math.min(1, accel * dt);
+    p.vel.x += (wx * targetSpeed - p.vel.x) * blend;
+    p.vel.z += (wz * targetSpeed - p.vel.z) * blend;
+  }
 
   if (inp.jump && p.onGround) {
     p.vel.y = PLAYER.jumpSpeed;
@@ -509,6 +639,12 @@ function tryFire(match, p) {
   if (!held || p.fireCd > 0 || p.reload || p.spawnShield > 0) return;
   const def = WEAPONS[held.kind];
 
+  // Melee shares the trigger with guns but skips ammo, spread and reload entirely.
+  if (def.melee) {
+    meleeSwing(match, p, def);
+    return;
+  }
+
   if (held.mag <= 0) {
     startReload(match, p);
     return;
@@ -516,9 +652,10 @@ function tryFire(match, p) {
 
   held.mag -= 1;
   p.fireCd = 60 / def.rpm;
+  p.lastFireAt = match.time;
 
   const ox = p.pos.x;
-  const oy = p.pos.y + PLAYER.eye;
+  const oy = p.pos.y + eyeHeight(p);
   const oz = p.pos.z;
   const spreadRad = (def.spread * Math.PI) / 180;
   // Moving/shooting while airborne widens the cone a little.
@@ -578,6 +715,112 @@ function traceShot(match, shooter, ox, oy, oz, dir, range) {
   return { t: bestT, victim, hitY, wall };
 }
 
+// ---------------------------------------------------------------- melee
+
+/**
+ * Nearest player inside the knife's short arc, ignoring anyone behind a wall.
+ * A knife is a swing, not a ray, so the arc is generous compared with a bullet's cone.
+ */
+function traceMelee(match, p) {
+  const def = WEAPONS.knife;
+  const eye = p.pos.y + eyeHeight(p);
+  let best = null;
+  let bestD = Infinity;
+
+  for (const other of match.players.values()) {
+    if (other === p || !other.alive) continue;
+    const dx = other.pos.x - p.pos.x;
+    const dz = other.pos.z - p.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.001 || d > def.range + PLAYER.radius) continue;
+    if (Math.abs(other.pos.y - p.pos.y) > 1.9) continue;
+    // Roughly in front of the crosshair (about a 115 degree arc).
+    if (Math.abs(angleDelta(p.yaw, Math.atan2(-dx, -dz))) > 1.0) continue;
+    // A blade does not reach through geometry.
+    const wall = raycastWorld(match.world, p.pos.x, eye, p.pos.z, dx / d, 0, dz / d, d);
+    if (wall && wall.t < d - 0.25) continue;
+    if (d < bestD) {
+      bestD = d;
+      best = other;
+    }
+  }
+  return best;
+}
+
+/**
+ * The stealth takedown: attacker directly behind the victim, close enough, and the victim has not
+ * engaged them (no recent shot at them, and no lock-on for bots).
+ */
+function canFinish(match, attacker, victim) {
+  if (!victim.alive || victim.spawnShield > 0) return false;
+  const dx = attacker.pos.x - victim.pos.x;
+  const dz = attacker.pos.z - victim.pos.z;
+  const d = Math.hypot(dx, dz);
+  if (d > MELEE.finisherRange || d < 0.001) return false;
+
+  // Behind them: the victim's forward vector must point away from the attacker.
+  const fx = -Math.sin(victim.yaw);
+  const fz = -Math.cos(victim.yaw);
+  if (((dx / d) * fx + (dz / d) * fz) > MELEE.finisherRearDot) return false;
+
+  // Unaware: they have not fired at this attacker recently.
+  if (victim.lastAttackId === attacker.id && match.time - victim.lastFireAt < MELEE.finisherAwareSeconds) return false;
+  // A bot that is tracking the attacker knows where they are, whatever its aim is doing.
+  if (victim.bot && victim.botState && victim.botState.targetId === attacker.id) return false;
+
+  return true;
+}
+
+function meleeSwing(match, p, def) {
+  p.fireCd = 60 / def.rpm;
+  p.lastFireAt = match.time;
+
+  const victim = traceMelee(match, p);
+  const eye = p.pos.y + eyeHeight(p);
+  const dir = aimDir(p.yaw, p.pitch);
+  const reach = victim
+    ? Math.min(def.range, Math.hypot(victim.pos.x - p.pos.x, victim.pos.z - p.pos.z))
+    : def.range;
+
+  if (victim && canFinish(match, p, victim)) {
+    finisher(match, p, victim);
+    return;
+  }
+
+  match.events.push({
+    type: 'melee',
+    id: p.id,
+    hit: victim ? 1 : 0,
+    sx: round2(p.pos.x),
+    sy: round2(eye),
+    sz: round2(p.pos.z),
+    ex: round2(p.pos.x + dir.x * reach),
+    ey: round2(eye + dir.y * reach),
+    ez: round2(p.pos.z + dir.z * reach),
+  });
+
+  if (victim) damagePlayer(match, victim, def.dmg, p, 'knife', false);
+}
+
+/** Arcade takedown: instant, silent, and over in a frame - no gore, just a tag. */
+function finisher(match, attacker, victim) {
+  attacker.finisherAt = match.time;
+  attacker.stamina = Math.min(PLAYER.staminaMax, attacker.stamina + MELEE.finisherStamina);
+  match.events.push({
+    type: 'finisher',
+    by: attacker.id,
+    id: victim.id,
+    kname: attacker.name,
+    kcolor: attacker.color,
+    vname: victim.name,
+    vcolor: victim.color,
+    x: round2(victim.pos.x),
+    y: round2(victim.pos.y),
+    z: round2(victim.pos.z),
+  });
+  killPlayer(match, victim, attacker, 'finisher', false);
+}
+
 function damagePlayer(match, target, amount, attacker, weaponKind, headshot) {
   if (!target.alive || target.spawnShield > 0) return;
 
@@ -590,6 +833,9 @@ function damagePlayer(match, target, amount, attacker, weaponKind, headshot) {
   target.hp -= remaining;
   target.lastAttacker = attacker.id;
   attacker.damageDealt += amount;
+  // Remembering who you shot (and when) is what makes someone count as aware of you.
+  attacker.lastAttackId = target.id;
+  attacker.lastFireAt = match.time;
 
   match.events.push({
     type: 'hit',
@@ -611,9 +857,15 @@ function damagePlayer(match, target, amount, attacker, weaponKind, headshot) {
 function killPlayer(match, victim, killer, weaponKind, headshot) {
   if (!victim.alive) return;
   victim.alive = false;
+  victim.hp = 0;
   victim.killerId = killer ? killer.id : null;
   victim.reload = null;
   victim.spawnShield = 0;
+  victim.slide = null;
+  victim.slideLock = true;
+  victim.sprinting = false;
+  victim.input.fire = false;
+  victim.input.slide = false;
 
   if (killer && killer !== victim) {
     killer.kills++;
@@ -638,6 +890,8 @@ function killPlayer(match, victim, killer, weaponKind, headshot) {
 function dropInventory(match, p, scatter) {
   const spots = [];
   for (let i = 0; i < p.slots.length; i++) {
+    // The knife is never dropped: it is part of the player, not their loot.
+    if (i === MELEE_SLOT) continue;
     const w = p.slots[i];
     if (!w) continue;
     const a = Math.random() * Math.PI * 2;
@@ -656,8 +910,8 @@ function dropInventory(match, p, scatter) {
       z,
     });
   }
-  p.slots = new Array(SLOTS).fill(null);
-  p.slot = 0;
+  p.slots = freshSlots();
+  p.slot = MELEE_SLOT;
 }
 
 // ---------------------------------------------------------------- loot
@@ -704,8 +958,9 @@ function tryPickup(match, p) {
     const def = WEAPONS[kind];
     const newWeapon = { kind, mag: typeof best.mag === 'number' ? best.mag : def.mag };
 
-    let slot = p.slots.findIndex((s) => s === null);
-    if (slot === -1) slot = p.slot;
+    // Guns only ever fill the two gun slots; the fixed melee slot is never replaced.
+    let slot = p.slots.findIndex((s, i) => i < GUN_SLOTS && s === null);
+    if (slot === -1) slot = p.slot < GUN_SLOTS ? p.slot : 0;
     else p.slot = slot;
 
     const replaced = p.slots[slot];
@@ -730,8 +985,13 @@ function tryPickup(match, p) {
   }
 
   if (best.kind === 'ammo') {
+    // With the knife out, ammo goes to the gun in the other slot instead of vanishing.
     const held = getHeld(p);
-    const kind = held ? held.kind : 'pistol';
+    let kind = held && !WEAPONS[held.kind].melee ? held.kind : null;
+    if (!kind) {
+      const gun = p.slots.find((s, i) => i < GUN_SLOTS && s);
+      kind = gun ? gun.kind : 'pistol';
+    }
     const def = WEAPONS[kind];
     p.reserve[kind] += def.pickup;
     removeLoot(match, best);
@@ -820,6 +1080,9 @@ export function buildSnapshot(match) {
       sh: p.spawnShield > 0 ? 1 : 0,
       rel: p.reload ? Math.max(0, Math.round((p.reload.endsAt - match.time) * 100) / 100) : 0,
       mv: Math.hypot(p.vel.x, p.vel.z) > 1 ? 1 : 0,
+      // Sliding players are visibly low, which is also the cue that they are harder to hit.
+      sl: p.slide ? 1 : 0,
+      sp: p.sprinting ? 1 : 0,
       kil: p.killerId,
     });
   }
@@ -881,6 +1144,13 @@ export function buildSelf(match, id) {
     damageDealt: Math.round(p.damageDealt),
     killerId: p.killerId,
     shield: Math.round(p.spawnShield * 10) / 10,
+    // ---- movement feedback
+    stamina: Math.round(p.stamina),
+    staminaMax: PLAYER.staminaMax,
+    sprinting: p.sprinting,
+    sliding: !!p.slide,
+    slideCd: Math.round(p.slideCd * 100) / 100,
+    melee: !!held && !!WEAPONS[held.kind].melee,
   };
 }
 

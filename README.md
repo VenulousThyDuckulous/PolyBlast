@@ -95,11 +95,13 @@ controller button hands it back to the controller — so the two never fight ove
 | `W` `A` `S` `D` | Move |
 | Mouse | Look |
 | Left click | Fire |
-| `Shift` | Sprint |
+| `Shift` | Sprint (drains stamina) |
+| `Ctrl` or `C` | Slide (needs sprint speed) |
 | `Space` | Jump |
 | `R` | Reload |
 | `E` | Pick up / swap weapon |
-| `1` `2` | Weapon slots |
+| `1` `2` | Gun slots |
+| `3` | Knife |
 | `Esc` | Pause / release mouse |
 
 **Controller** (standard mapping — Xbox layout names, any pad should do)
@@ -110,10 +112,12 @@ controller button hands it back to the controller — so the two never fight ove
 | Right stick | Look |
 | `RT` | Fire |
 | `LT` | Sprint |
+| `L3` (hold) | Slide |
 | `A` | Jump |
 | `X` | Reload |
 | `Y` | Pick up / swap weapon |
-| `LB` `RB` | Weapon slots |
+| `LB` `RB` | Gun slots |
+| `D-pad up` | Knife |
 | `Start` | Pause |
 
 **Touchscreen** (landscape recommended)
@@ -123,11 +127,38 @@ controller button hands it back to the controller — so the two never fight ove
 | Left thumb stick | Move |
 | Drag anywhere else | Look |
 | `FIRE` / `JUMP` / `RELOAD` / `PICK` | Actions |
-| `1` `2` | Weapon slots |
+| `SLIDE` (hold) | Slide |
+| `1` `2` | Gun slots |
+| `KNIFE` | Knife |
 | `II` | Pause |
 
 The stick and the look drag track separate fingers, so you can run and aim at once. The HUD moves
 itself out of the thumb zones and respects notched-screen safe areas.
+
+## Movement and melee
+
+**Sprint** is `9.2` m/s against a `6.4` walk, ramping in over about a tenth of a second and braking
+smoothly when you let go. It burns stamina (21/s) and an empty bar latches until you release the key,
+so a held `Shift` cannot stutter between two speeds.
+
+**Slide** is a burst of momentum: it needs sprint speed, costs 20 stamina, lasts 0.72 s, and takes a
+0.8 s recovery before you can slide again. While sliding the hitbox drops from 1.8 m to 0.95 m and the
+camera drops with it, so shots aimed at a standing chest pass over your head. Firing ends the slide
+but keeps the speed, which is what makes slide-into-shooting feel good. Holding the key does **not**
+chain slides — release and press again.
+
+**The knife** lives in its own third slot and is always yours; it is never looted, never reloads and
+never runs dry. It hits for 58 inside 2.4 m with a 105 rpm swing, so it is a finisher, not a duelist's
+weapon. Guns still fight over the two gun slots — picking one up can never displace the knife.
+
+**The takedown** is the stealth kill: with the knife out, walk up behind someone who has not engaged
+you (no shots at you in the last 2.5 s, and bots that are tracking you are excluded) and swing. It is
+an instant elimination with a flash, a sting and a kill-feed entry — arcade, not graphic. A `FINISH`
+chip appears above the crosshair when the server would allow it, so the mechanic is readable before
+you commit. A successful takedown refunds 25 stamina, which usually pays for the escape slide.
+
+Bots sprint, slide occasionally, and switch to the knife when they run dry in someone's face, so all
+of this happens in a solo match too.
 
 ## How a match plays
 
@@ -147,6 +178,9 @@ Every number that affects feel lives in one file: [`server/config.js`](server/co
 | --- | --- |
 | Weapon damage, rpm, spread, magazine, reload, range | `WEAPONS` |
 | Movement speed, sprint, jump, gravity, HP, armor absorption | `PLAYER` |
+| Stamina drain/regen, slide speed, duration, cooldown, hitbox height | `PLAYER` |
+| Knife damage, reach, swing rate | `WEAPONS.knife` |
+| Takedown range, rear arc, awareness window, stamina refund | `MELEE` |
 | Zone phase timings, radii and damage-per-second | `ZONE_PHASES` |
 | Lobby size, bot count, loot density, pickup radius | `MATCH` |
 | **Difficulty** | `SIM.botSpreadPenalty` |
@@ -165,10 +199,10 @@ only a server restart — no client changes.
 npm test
 ```
 
-A headless suite (`test/smoke.test.js`, 23 checks) that drives the real simulation with no browser:
-map generation, collision, raycasts, movement, walls blocking bullets, headshots, armor, loot and
-reloads, zone damage, bots looting and fighting, match reset, and one real WebSocket client joining
-and receiving state.
+A headless suite (`test/smoke.test.js`, 35 checks) that drives the real simulation with no browser:
+map generation, collision, raycasts, movement, stamina and slide physics, walls blocking bullets,
+headshots, armor, the knife and the takedown rules, loot and reloads, zone damage, bots looting and
+fighting, match reset, and one real WebSocket client joining and receiving state.
 
 ## Architecture
 
@@ -198,9 +232,10 @@ over sockets — join, input, tick, snapshot — but delivers the messages throu
 that never touches the network. `Net` cannot tell the difference, so offline play runs the identical
 client code path as real multiplayer, including interpolation.
 
-**Authority.** Clients send intents only (`yaw`, `pitch`, movement axes, `fire`, `reload`, `interact`,
-`slot`). Position, health, hits, pickups, deaths and the winner are resolved on the server. Every shot
-is a raycast against the server's world geometry, so bullets cannot pass through walls.
+**Authority.** Clients send intents only (`yaw`, `pitch`, movement axes, `fire`, `slide`, `reload`,
+`interact`, `slot`). Position, stamina, hits, pickups, deaths and the winner are resolved on the
+server. Every shot is a raycast against the server's world geometry, so bullets cannot pass through
+walls, and a slide only exists because the server agreed you were fast enough and had the stamina.
 
 **Netcode.** 30 Hz fixed-step simulation, 20 Hz snapshots. Your own rotation is instant and your own
 position is eased toward the authoritative one; other players are interpolated ~100 ms in the past.

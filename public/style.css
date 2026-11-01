@@ -190,6 +190,25 @@ kbd {
   background: linear-gradient(90deg, #3d8fbe, var(--armor));
 }
 
+.bar.stamina {
+  height: 5px;
+  margin-bottom: 6px;
+}
+
+.bar.stamina > div {
+  background: linear-gradient(90deg, #3f78a8, #7fd6ff);
+  transition: width 90ms linear, background 220ms linear;
+}
+
+/* Out of sprint headroom: still usable, but you cannot start another sprint on it. */
+.bar.stamina > div.spent {
+  background: linear-gradient(90deg, #8a5a18, var(--warn, #ffb457));
+}
+
+.bar.stamina > div.draining {
+  filter: brightness(1.25);
+}
+
 .vitals-row {
   display: flex;
   align-items: baseline;
@@ -258,6 +277,15 @@ kbd {
 .slot-key {
   font-size: 9px;
   opacity: 0.6;
+}
+
+/* The melee slot is always there, so it is drawn as a fixture rather than loot. */
+.slot.melee {
+  border-style: dashed;
+}
+
+.slot.melee.active {
+  border-style: solid;
 }
 
 #ammo {
@@ -473,6 +501,64 @@ kbd {
 #vignette.hurt {
   opacity: 1;
   transition: opacity 60ms;
+}
+
+/* ------------------------------------------------- stealth finisher + flash */
+
+#finisher-prompt {
+  position: absolute;
+  left: 50%;
+  /* Above the crosshair: the loot prompt sits below it and the two can be up at once. */
+  top: calc(50% - 76px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--danger);
+  background: rgba(12, 6, 10, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: finisherPulse 1.1s ease-in-out infinite;
+}
+
+.finisher-tag {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+@keyframes finisherPulse {
+  0%,
+  100% {
+    border-color: rgba(255, 93, 108, 0.45);
+  }
+  50% {
+    border-color: var(--danger);
+  }
+}
+
+/* Arcade pulse when a takedown lands: a flash, not gore. */
+#flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.18) 0%, transparent 58%);
+}
+
+#flash.show {
+  animation: flashPulse 420ms ease-out;
+}
+
+@keyframes flashPulse {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ---------------------------------------------------------------- screens */
@@ -968,7 +1054,7 @@ button:disabled {
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(16px + env(safe-area-inset-bottom));
   width: 250px;
-  height: 212px;
+  height: 284px;
   pointer-events: none;
 }
 
@@ -1038,6 +1124,16 @@ button:disabled {
   bottom: 144px;
 }
 
+.tbtn[data-act='slide'] {
+  right: 106px;
+  bottom: 144px;
+}
+
+.tbtn[data-act='slot3'] {
+  right: 180px;
+  bottom: 216px;
+}
+
 .tbtn[data-act='pause'] {
   right: 0;
   bottom: 116px;
@@ -1073,7 +1169,7 @@ body.touch-on #vitals {
 
 body.touch-on #weapon-panel {
   right: 14px;
-  bottom: 218px;
+  bottom: 292px;
   min-width: 140px;
 }
 

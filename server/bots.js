@@ -7,7 +7,7 @@
  */
 
 import { PLAYER, WEAPONS, SIM } from './config.js';
-import { angleDelta, clamp } from '../shared/protocol.js';
+import { angleDelta, clamp, GUN_SLOTS } from '../shared/protocol.js';
 import { hasLineOfSight, raycastWorld } from './world.js';
 
 const dist2d = (a, b) => Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z);
@@ -147,6 +147,7 @@ export function updateBots(match, dt) {
     if (!p.bot) continue;
     if (!p.alive) {
       p.input.fire = false;
+      p.input.slide = false;
       p.input.mx = 0;
       p.input.mz = 0;
       continue;
@@ -163,12 +164,20 @@ export function updateBots(match, dt) {
     p.thinkTimer = SIM.botThink + Math.random() * 0.06;
 
     think(match, p, state, dt);
+
+    // Bots slide now and then while sprinting. Rare enough to stay readable, common enough that the
+    // mechanic exists in a solo match without a human doing it first.
+    p.input.slide = !!(p.input.sprint && !p.slide && p.stamina > 55 && Math.random() < 0.06);
   }
 }
 
 function think(match, p, state, dt) {
   const held = p.slots[p.slot] || null;
-  const armed = !!held && (held.mag > 0 || p.reserve[held.kind] > 0);
+  const heldDef = held ? WEAPONS[held.kind] : null;
+  const melee = !!(heldDef && heldDef.melee);
+  // The knife counts as armed at arm's length, but a gun is still what they actually want.
+  const gunSlot = p.slots.findIndex((s, i) => i < GUN_SLOTS && s && (s.mag > 0 || p.reserve[s.kind] > 0));
+  const hasGun = p.slots.some((s, i) => i < GUN_SLOTS && !!s);
   const z = match.zone;
 
   const target = pickTarget(match, p, state);
@@ -182,8 +191,19 @@ function think(match, p, state, dt) {
     state.lostFor += SIM.botThink;
   }
 
-  // --- unarmed: find a gun -------------------------------------------------
-  if (!armed) {
+  // --- no gun: grab one, but still stick anyone who walks into knife range --
+  if (!hasGun) {
+    if (target && dist2d(p, target) < WEAPONS.knife.range * 0.9 && p.slot === 2) {
+      const aim = aimAt(p, target.pos.x, target.pos.y + 1.0, target.pos.z, { yaw: 0, pitch: 0 });
+      p.input.yaw = approachAngle(p.input.yaw, aim.yaw, 7 * SIM.botThink);
+      p.input.pitch = aim.pitch;
+      p.input.fire = true;
+      p.input.mx = 0;
+      p.input.mz = 0;
+      return;
+    }
+    // Draw the knife while looking for a gun, so they are not defenceless.
+    if (p.slots[2]) p.pending.slot = 3;
     p.input.fire = false;
     const gun = nearestLoot(match, p, (it) => it.kind === 'weapon');
     if (gun) {
@@ -215,7 +235,7 @@ function think(match, p, state, dt) {
       (it.kind === 'ammo' && p.reserve[held.kind] < WEAPONS[held.kind].pickup) ||
       (it.kind === 'medkit' && p.hp < PLAYER.maxHp - 25) ||
       (it.kind === 'armor' && p.armor < PLAYER.maxArmor - 10) ||
-      (it.kind === 'weapon' && p.slots.filter(Boolean).length < 2),
+      (it.kind === 'weapon' && p.slots.filter((s, i) => i < GUN_SLOTS && s).length < GUN_SLOTS),
   );
   if (near) {
     const d = Math.hypot(near.x - p.pos.x, near.z - p.pos.z);
@@ -233,9 +253,22 @@ function think(match, p, state, dt) {
     }
   }
 
+  // --- weapon choice: gun at range, knife in someone's face ----------------
+  if (target) {
+    const d = dist2d(p, target);
+    if (melee && d > 3.4 && gunSlot !== -1) {
+      p.pending.slot = gunSlot + 1;
+      return;
+    }
+    if (!melee && gunSlot !== -1 && (held.mag <= 0 || p.reload) && d < 2.8) {
+      p.pending.slot = 3;
+      return;
+    }
+  }
+
   // --- reload when it's quiet ---------------------------------------------
-  if (held.mag <= 0) p.pending.reload = true;
-  else if (!target && held.mag < WEAPONS[held.kind].mag * 0.5) p.pending.reload = true;
+  if (!melee && held.mag <= 0) p.pending.reload = true;
+  else if (!melee && !target && held.mag < WEAPONS[held.kind].mag * 0.5) p.pending.reload = true;
 
   // --- fight ---------------------------------------------------------------
   if (target) {
@@ -249,7 +282,6 @@ function think(match, p, state, dt) {
     const aim = aimAt(p, target.pos.x, target.pos.y + 1.05, target.pos.z, error);
     p.input.yaw = approachAngle(p.input.yaw, aim.yaw, 7 * SIM.botThink);
     p.input.pitch = aim.pitch;
-
     state.reaction = Math.max(0, state.reaction - SIM.botThink);
     if (state.reaction <= 0 && state.seenFor < SIM.botReaction) {
       state.reaction = SIM.botReaction;
@@ -262,9 +294,10 @@ function think(match, p, state, dt) {
       aligned &&
       state.burstLeft > 0 &&
       p.reload === null &&
-      held.mag > 0 &&
+      (def.melee || held.mag > 0) &&
       state.seenFor > SIM.botReaction;
-    p.input.fire = canShoot && d < def.range * 0.9;
+    // Melee needs to be in reach; guns open up a little short of their maximum range.
+    p.input.fire = canShoot && d < (def.melee ? def.range * 0.85 : def.range * 0.9);
     if (p.input.fire) {
       state.burstLeft--;
       if (state.burstLeft <= 0) state.burstCd = SIM.botBurstPause * (0.8 + Math.random() * 0.6);
@@ -275,7 +308,7 @@ function think(match, p, state, dt) {
       state.strafeDir *= -1;
       state.strafeTimer = 0.5 + Math.random() * 0.9;
     }
-    const ideal = def.id === 'shotgun' ? 7 : def.id === 'rifle' ? 26 : 12;
+    const ideal = def.melee ? 1.1 : def.id === 'shotgun' ? 7 : def.id === 'rifle' ? 26 : 12;
     let dx = 0;
     let dz = 0;
     if (d < ideal - 3) {
@@ -294,7 +327,8 @@ function think(match, p, state, dt) {
     const mv = localMove(p.input.yaw, dx * 0.85 + px * 0.75, dz * 0.85 + pz * 0.75);
     p.input.mx = mv.mx;
     p.input.mz = mv.mz;
-    p.input.sprint = false;
+    // Close the last couple of metres fast when going in with the knife.
+    p.input.sprint = def.melee && d > 3;
     p.input.jump = false;
     return;
   }

@@ -29,10 +29,13 @@ const BUTTON = {
   jump: [0],
   reload: [2],
   interact: [3],
-  sprint: [6, 10],
+  sprint: [6],
   fire: [7],
-  slotPrev: [4, 12],
-  slotNext: [5, 13],
+  slotPrev: [4],
+  slotNext: [5],
+  /** D-pad up draws the knife; L3 held slides. */
+  slot3: [12],
+  slide: [10],
   pause: [9],
 };
 
@@ -174,6 +177,7 @@ export class Devices {
     if (rising(BUTTON.interact)) this.padActions.interact = true;
     if (rising(BUTTON.slotNext)) this.padActions.slot = 2;
     if (rising(BUTTON.slotPrev)) this.padActions.slot = 1;
+    if (rising(BUTTON.slot3)) this.padActions.slot = 3;
     if (rising(BUTTON.pause)) this.padActions.pause = true;
     this.prevPadButtons = buttons;
 
@@ -184,6 +188,7 @@ export class Devices {
       jump: pressed(buttons, BUTTON.jump),
       fire: pressed(buttons, BUTTON.fire, TRIGGER_ON),
       sprint: pressed(buttons, BUTTON.sprint, TRIGGER_ON),
+      slide: pressed(buttons, BUTTON.slide),
     };
   }
 

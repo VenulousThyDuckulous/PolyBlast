@@ -26,6 +26,9 @@ const MOVE_KEYS = {
   ArrowRight: 'right',
 };
 
+/** Ctrl is what the players expect for a slide; C is the one that cannot hit a browser shortcut. */
+const SLIDE_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
+
 const SENSITIVITY = 0.0021;
 /** Radians per second at full stick deflection. */
 const PAD_LOOK_SPEED = 3.1;
@@ -111,9 +114,12 @@ export class Input {
 
   onKeyDown(e) {
     if (!this.enabled) return;
-    if (MOVE_KEYS[e.code] || ['Space', 'ShiftLeft', 'ShiftRight', 'KeyR', 'KeyE', 'Digit1', 'Digit2'].includes(e.code)) {
+    if (MOVE_KEYS[e.code] || ['Space', 'ShiftLeft', 'ShiftRight', 'KeyR', 'KeyE', 'KeyC', 'Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
       e.preventDefault();
     }
+    // Ctrl+W is a reserved browser shortcut; cancel the bare modifier so slide-then-move is safe
+    // wherever the browser honours it.
+    if (e.key === 'Control') e.preventDefault();
     this.keys.add(e.code);
     if (this.devices.platform !== 'mobile') this.devices.setActive(DEVICE.KEYBOARD);
 
@@ -131,6 +137,9 @@ export class Input {
       case 'Digit2':
         this.actions.slot = 2;
         break;
+      case 'Digit3':
+        this.actions.slot = 3;
+        break;
       case 'Escape':
         this.onAction?.('escape');
         break;
@@ -144,6 +153,7 @@ export class Input {
   clear() {
     this.keys.clear();
     this.mouseFire = false;
+    this.pad = null;
     this.touch.clear();
   }
 
@@ -206,6 +216,13 @@ export class Input {
       z /= len;
     }
     return { x, z };
+  }
+
+  /** True while the slide key/button is held. The sim decides whether a slide may actually start. */
+  get slide() {
+    if (this.devices.usingTouch) return this.touch.slide;
+    if (this.devices.usingGamepad && this.pad) return this.pad.slide;
+    return SLIDE_KEYS.some((code) => this.keys.has(code));
   }
 
   isSprinting() {

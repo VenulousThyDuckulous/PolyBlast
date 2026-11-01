@@ -17,7 +17,10 @@ export const PHASE = {
   OVER: 'over',
 };
 
-export const SLOTS = 2;
+/** Two gun slots plus a permanent melee slot that always holds the knife. */
+export const SLOTS = 3;
+export const MELEE_SLOT = 2;
+export const GUN_SLOTS = 2;
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -56,8 +59,10 @@ export function sanitizeInput(raw) {
     sprint: !!raw.sprint,
     jump: !!raw.jump,
     fire: !!raw.fire,
+    /** Held, not edge-triggered: the sim decides when a slide may actually start. */
+    slide: !!raw.slide,
     reload: !!raw.reload,
     interact: !!raw.interact,
-    slot: raw.slot === 1 ? 1 : raw.slot === 2 ? 2 : 0,
+    slot: raw.slot === 1 ? 1 : raw.slot === 2 ? 2 : raw.slot === 3 ? 3 : 0,
   };
 }

@@ -53,6 +53,7 @@ let seq = 0;
 let stepTimer = 0;
 let countdownBeep = 99;
 let lastAlive = true;
+let lastStamina = 100;
 
 nameInput.value = localStorage.getItem('polyblast-name') || localStorage.getItem('lastcircle-name') || '';
 
@@ -253,6 +254,36 @@ function handleEvents(events) {
           sfx.deny();
         }
         break;
+      case 'slide': {
+        sfx.slide(Math.hypot(e.x - self.x, e.z - self.z));
+        if (e.id === net.id) renderer.addShake(0.1);
+        break;
+      }
+      case 'melee': {
+        const mine = e.id === net.id;
+        const dist = Math.hypot(e.sx - self.x, e.sz - self.z);
+        sfx.swing(dist, mine);
+        if (mine) renderer.swingKnife();
+        renderer.addTracer(
+          { x: e.sx, y: e.sy, z: e.sz },
+          { x: e.ex, y: e.ey, z: e.ez },
+          mine ? 0xf2f7ff : 0xc9d6e6,
+          0.05,
+        );
+        if (e.hit) renderer.addSpark(e.ex, e.ey, e.ez, 0xffe6a0);
+        break;
+      }
+      case 'finisher': {
+        if (e.by === net.id) {
+          // The HUD owns the flash; the camera just takes the hit of the motion.
+          hud.finisher(e.vname);
+          sfx.finisher();
+          renderer.addShake(0.55);
+        } else if (e.id === net.id) {
+          sfx.death();
+        }
+        break;
+      }
       case 'zoneClose':
         sfx.zoneWarn();
         hud.banner('The circle is closing', 2000);
@@ -343,6 +374,12 @@ function buildView(dt) {
       pitch: input.pitch,
       alive: alive && !!meEntry?.al,
       weapon: you?.held || null,
+      melee: !!you?.melee,
+      sliding: !!you?.sliding,
+      sprinting: !!you?.sprinting,
+      stamina: you?.stamina ?? 100,
+      staminaMax: you?.staminaMax ?? 100,
+      slideReady: !you?.sliding && (you?.slideCd ?? 0) <= 0,
     },
     players,
     loot: state.loot,
@@ -354,7 +391,34 @@ function buildView(dt) {
     arenaHalf: config.arenaHalf,
     spectateId: you?.killerId ?? null,
     nearbyLoot: alive ? nearestLootLabel(state, meEntry) : null,
+    finisher: alive ? finisherTarget(state, you) : null,
   };
+}
+
+/**
+ * Client-side guess at whether a takedown is available, for the HUD prompt only. The server has the
+ * final say (it also knows things like "are they tracking me"), so the prompt is anticipation, not
+ * the mechanic.
+ */
+function finisherTarget(state, you) {
+  if (!you?.alive || !you?.melee || !config?.melee) return null;
+  const range = config.melee.finisherRange;
+  const rearDot = config.melee.finisherRearDot;
+  let best = null;
+  let bestD = range;
+  for (const p of state.players) {
+    if (p.id === net.id || !p.al || p.sh) continue;
+    const dx = self.x - p.x;
+    const dz = self.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d > bestD || d < 0.001) continue;
+    const fx = -Math.sin(p.yaw);
+    const fz = -Math.cos(p.yaw);
+    if ((dx / d) * fx + (dz / d) * fz > rearDot) continue;
+    bestD = d;
+    best = p.n;
+  }
+  return best;
 }
 
 // ------------------------------------------------------------------ input
@@ -379,6 +443,7 @@ function sendInput(dt) {
       sprint: active && input.isSprinting(),
       jump: active && input.isJumping(),
       fire: active && input.fire,
+      slide: active && input.slide,
       reload: actions.reload,
       interact: actions.interact,
       slot: actions.slot,
@@ -424,19 +489,32 @@ function updateAmbient(view, dt) {
     countdownBeep = 99;
   }
 
-  // Footsteps while moving on the ground.
+  // Footsteps while moving on the ground, faster and heavier while sprinting.
   if (view.me.alive && phase === 'playing') {
     const axes = input.axes();
     const moving = Math.hypot(axes.x, axes.z) > 0.1;
-    if (moving) {
+    const sprinting = !!view.me.sprinting;
+    if (moving || view.me.sliding) {
       stepTimer -= dt;
       if (stepTimer <= 0) {
-        sfx.step();
-        stepTimer = input.isSprinting() ? 0.3 : 0.44;
+        if (view.me.sliding) {
+          // The slide sound itself covers the scrape; no footsteps on top of it.
+          stepTimer = 0.3;
+        } else if (sprinting) {
+          sfx.sprintStep();
+          stepTimer = 0.3;
+        } else {
+          sfx.step();
+          stepTimer = 0.44;
+        }
       }
     } else {
       stepTimer = 0;
     }
+
+    // Emptying the bar is a real event for the player, so it gets a sound.
+    if (lastStamina > 0 && view.me.stamina <= 0) sfx.exhausted();
+    lastStamina = view.me.stamina;
   }
 
   if (view.you && view.you.alive !== lastAlive) {

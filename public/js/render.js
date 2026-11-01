@@ -18,8 +18,14 @@ const WEAPON_LOOK = {
   smg: { color: 0x7ae582, length: 0.5, thick: 0.12 },
   shotgun: { color: 0xff8b6b, length: 0.62, thick: 0.15 },
   rifle: { color: 0x8ecae6, length: 0.7, thick: 0.11 },
+  knife: { color: 0xdfe7f2, length: 0.3, thick: 0.06 },
   unarmed: { color: 0x8fa3bb, length: 0.2, thick: 0.08 },
 };
+
+/** Camera pitch/FOV response: sprinting widens the view, sliding widens it further and rolls it. */
+const FOV_BASE = 78;
+const FOV_SPRINT = 83;
+const FOV_SLIDE = 89;
 
 const LOOT_LOOK = {
   weapon: { color: 0xffd166, size: [0.15, 0.15, 0.7] },
@@ -263,6 +269,39 @@ export class Renderer {
     this.gunGroup.add(this.muzzle);
     this.muzzleTimer = 0;
 
+    // ---- knife: its own silhouette, held low so it reads as a tool rather than a gun.
+    this.knifeGroup = new THREE.Group();
+    this.bladeMaterial = new THREE.MeshStandardMaterial({
+      color: 0xdfe7f2,
+      roughness: 0.22,
+      metalness: 0.7,
+      flatShading: true,
+    });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.075, 0.3), this.bladeMaterial);
+    blade.position.set(0, 0.02, -0.17);
+    this.knifeGroup.add(blade);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.046, 0.13, 4), this.bladeMaterial);
+    tip.rotation.x = -Math.PI / 2;
+    tip.position.set(0, 0.02, -0.38);
+    this.knifeGroup.add(tip);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.028, 0.03), this.gunDark);
+    guard.position.set(0, 0, -0.012);
+    this.knifeGroup.add(guard);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.05, 0.15), this.gunDark);
+    handle.position.set(0, -0.004, 0.07);
+    this.knifeGroup.add(handle);
+    // Held further out than the gun and angled across the screen, so the blade reads as a blade.
+    this.knifeGroup.position.set(0.3, -0.26, -0.52);
+    this.knifeGroup.rotation.set(0.06, 0.42, -0.62);
+    this.knifeGroup.scale.setScalar(0.92);
+    this.viewmodel.add(this.knifeGroup);
+
+    this.swingDur = 0.26;
+    this.swingTimer = 0;
+    this.eye = EYE;
+    this.fov = FOV_BASE;
+    this.roll = 0;
+
     this.camera.add(this.viewmodel);
   }
 
@@ -387,7 +426,7 @@ export class Renderer {
 
   // ------------------------------------------------------------------ effects
 
-  addTracer(from, to, color = 0xffe0a0) {
+  addTracer(from, to, color = 0xffe0a0, life = 0.085) {
     this.tracers.push({
       ax: from.x,
       ay: from.y,
@@ -395,8 +434,8 @@ export class Renderer {
       bx: to.x,
       by: to.y,
       bz: to.z,
-      life: 0.085,
-      max: 0.085,
+      life,
+      max: life,
       color: new THREE.Color(color),
     });
     if (this.tracers.length > TRACER_MAX) this.tracers.shift();
@@ -415,6 +454,12 @@ export class Renderer {
     this.recoil = Math.min(1.4, this.recoil + 0.5 * n);
     this.muzzle.visible = true;
     this.muzzleTimer = 0.05;
+  }
+
+  /** Start the knife swing animation; the event that triggered it already did the damage. */
+  swingKnife() {
+    this.swingTimer = this.swingDur;
+    this.muzzle.visible = false;
   }
 
   addShake(n = 0.3) {
@@ -438,11 +483,16 @@ export class Renderer {
 
   updateCamera(view, dt) {
     const me = view.me;
+    // Sliding drops the eye to the same low height the hitbox uses, and eases back up afterwards.
+    const targetEye = me.sliding ? (view.config.player?.slideEye ?? 0.95) : EYE;
+    this.eye += (targetEye - this.eye) * Math.min(1, dt * 15);
+
     if (me.alive) {
-      this.camera.position.set(me.x, me.y + EYE, me.z);
+      this.camera.position.set(me.x, me.y + this.eye, me.z);
       this.camera.rotation.set(me.pitch, me.yaw, 0, 'YXZ');
       this.viewmodel.visible = true;
     } else {
+      this.eye = EYE;
       this.viewmodel.visible = false;
       const killer = view.players.find((p) => p.id === view.spectateId && p.alive);
       if (killer) {
@@ -458,17 +508,28 @@ export class Renderer {
       }
     }
 
+    // Sprinting and sliding widen the view; a slide also banks the camera slightly.
+    const targetFov = me.sliding ? FOV_SLIDE : me.sprinting ? FOV_SPRINT : FOV_BASE;
+    if (Math.abs(targetFov - this.fov) > 0.02) {
+      this.fov += (targetFov - this.fov) * Math.min(1, dt * 8);
+      this.camera.fov = this.fov;
+      this.camera.updateProjectionMatrix();
+    }
+    const targetRoll = me.sliding ? -0.055 : 0;
+    this.roll += (targetRoll - this.roll) * Math.min(1, dt * 10);
+    this.camera.rotation.z += this.roll;
+
     // Damage shake, decaying fast.
     this.shake = Math.max(0, this.shake - dt * 1.8);
     if (this.shake > 0.001) {
       const s = this.shake * 0.02;
       this.camera.rotation.x += (Math.random() - 0.5) * s;
       this.camera.rotation.y += (Math.random() - 0.5) * s;
-      this.camera.rotation.z = (Math.random() - 0.5) * s * 0.6;
+      this.camera.rotation.z += (Math.random() - 0.5) * s * 0.6;
     }
   }
 
-  updatePlayers(view) {
+  updatePlayers(view, dt = 0.016) {
     const seen = new Set();
     for (const p of view.players) {
       if (p.id === this.selfId) continue;
@@ -479,6 +540,11 @@ export class Renderer {
       if (!p.al) continue;
       entry.group.position.set(p.x, p.y, p.z);
       entry.group.rotation.y = p.yaw;
+      // Sliding tucks the body down; sprinting leans it in. Both read at a glance from range.
+      const targetSquash = p.sl ? 0.55 : 1;
+      entry.squash = (entry.squash ?? 1) + (targetSquash - (entry.squash ?? 1)) * Math.min(1, dt * 16);
+      entry.group.scale.y = entry.squash;
+      entry.group.rotation.x = p.sl ? 0.34 : p.sp ? 0.1 : 0;
       entry.shield.visible = !!p.sh && p.al;
       // Straight above someone standing in your face the name tag fills half the screen.
       const near = (p.x - view.me.x) ** 2 + (p.z - view.me.z) ** 2 < 2.4 * 2.4;
@@ -621,10 +687,16 @@ export class Renderer {
   }
 
   updateViewmodel(view, dt) {
-    // Never show a gun the player has not picked up yet.
+    // Never show a weapon the player does not have: the knife lives in its own slot, so it swaps in.
     const armed = !!view.me.weapon;
-    this.gunGroup.visible = armed;
+    const melee = armed && !!view.me.melee;
+    this.gunGroup.visible = armed && !melee;
+    this.knifeGroup.visible = melee;
     if (!armed) return;
+    if (melee) {
+      this.updateKnife(dt);
+      return;
+    }
 
     const look = WEAPON_LOOK[view.me.weapon] || WEAPON_LOOK.unarmed;
     this.gunMaterial.color.setHex(look.color);
@@ -642,6 +714,17 @@ export class Renderer {
     this.muzzleTimer -= dt;
     if (this.muzzleTimer <= 0) this.muzzle.visible = false;
     else this.muzzle.scale.setScalar(0.35 + Math.random() * 0.25);
+  }
+
+  updateKnife(dt) {
+    this.swingTimer = Math.max(0, this.swingTimer - dt);
+    // A single snappy arc: pull back, then stab forward and across. Nothing lingers after it lands.
+    const swinging = this.swingTimer > 0;
+    const t = swinging ? 1 - this.swingTimer / this.swingDur : 1;
+    const s = swinging ? Math.sin(Math.min(1, t) * Math.PI) : 0;
+    const sway = Math.sin(this.time * 2.1) * 0.006;
+    this.knifeGroup.position.set(0.3 - s * 0.2, -0.26 + s * 0.08 + sway, -0.52 - s * 0.16);
+    this.knifeGroup.rotation.set(0.06 - s * 1.3, 0.42 + s * 0.5, -0.62 + s * 1.1);
   }
 
   render() {

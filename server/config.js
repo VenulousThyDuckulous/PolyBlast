@@ -16,8 +16,12 @@ export const PLAYER = {
   height: 1.8,
   eye: 1.62,
   speed: 6.4,
-  sprintSpeed: 9.0,
-  groundAccel: 16,
+  sprintSpeed: 9.2,
+  /** Acceleration while a movement key is held, and braking once it is released. */
+  groundAccel: 22,
+  groundFriction: 13,
+  /** Sprinting ramps up over slightly longer than a normal start, so it has weight. */
+  sprintAccel: 13,
   airAccel: 3.2,
   jumpSpeed: 7.4,
   gravity: 22,
@@ -27,6 +31,45 @@ export const PLAYER = {
   armorAbsorb: 0.6,
   spawnShield: 3,
   respawnSlotDelay: 0.35,
+
+  // ---- stamina (sprint + slide share one pool) ----
+  staminaMax: 100,
+  /** Drained per second while sprinting. */
+  staminaDrain: 21,
+  /** Refilled per second once regen kicks in. */
+  staminaRegen: 27,
+  /** Quiet time after a sprint or slide before stamina starts coming back. */
+  staminaRegenDelay: 0.7,
+  /** A sprint cannot *start* below this, so an empty bar is a real breather. */
+  staminaSprintMin: 14,
+
+  // ---- slide ----
+  /** Launch speed: faster than a sprint, decaying to slideEndSpeed over the slide. */
+  slideSpeed: 11.8,
+  slideEndSpeed: 6.4,
+  /** Needs at least this much ground speed to kick off a slide. */
+  slideMinSpeed: 6.6,
+  slideDuration: 0.72,
+  /** Extra delay after a slide finishes before another can start. */
+  slideCooldown: 0.8,
+  slideStamina: 20,
+  /** Eye/hitbox height while sliding - low enough to slip under a shot aimed at a standing chest. */
+  slideHeight: 0.95,
+  slideEye: 0.95,
+  /** How quickly the slide can be steered while under way, in radians per second. */
+  slideTurn: 1.5,
+};
+
+/** Melee-only tuning: the knife and the stealth finisher behind it. */
+export const MELEE = {
+  /** Maximum distance for a takedown, measured centre to centre. */
+  finisherRange: 2.2,
+  /** Attacker must be in the victim's rear arc: victim-forward · toward-attacker below this. */
+  finisherRearDot: -0.35,
+  /** The victim counts as aware if it shot at the attacker this recently. */
+  finisherAwareSeconds: 2.5,
+  /** Stamina refunded by a successful takedown, so it chains into an escape. */
+  finisherStamina: 25,
 };
 
 /**
@@ -102,6 +145,26 @@ export const WEAPONS = {
     reserve: 20,
     pickup: 16,
     color: '#8ecae6',
+  },
+  /**
+   * Always carried, never looted: the melee slot. `melee: true` routes it through the swing path in
+   * tryFire instead of the hitscan path, so it has no magazine, no reload and no reserve ammo.
+   */
+  knife: {
+    id: 'knife',
+    label: 'Knife',
+    melee: true,
+    dmg: 58,
+    pellets: 1,
+    spread: 0,
+    rpm: 105,
+    mag: 0,
+    reload: 0,
+    range: 2.4,
+    head: 1,
+    reserve: 0,
+    pickup: 0,
+    color: '#dfe7f2',
   },
 };
 

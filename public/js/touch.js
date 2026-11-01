@@ -33,6 +33,7 @@ export class TouchControls {
     this.fire = false;
     this.jump = false;
     this.sprint = false;
+    this.slide = false;
     this.actions = { reload: false, interact: false, slot: 0, pause: false };
 
     this.root = document.getElementById('touch');
@@ -117,7 +118,7 @@ export class TouchControls {
     // -------------------------------------------------------------- buttons
     for (const button of this.buttons.querySelectorAll('[data-act]')) {
       const act = button.dataset.act;
-      const isHold = act === 'fire' || act === 'jump' || act === 'sprint';
+      const isHold = act === 'fire' || act === 'jump' || act === 'sprint' || act === 'slide';
 
       button.addEventListener('pointerdown', (e) => {
         if (!this.enabled) return;
@@ -128,11 +129,13 @@ export class TouchControls {
         if (act === 'fire') this.fire = true;
         else if (act === 'jump') this.jump = true;
         else if (act === 'sprint') this.sprint = true;
+        else if (act === 'slide') this.slide = true;
         else if (act === 'reload') this.actions.reload = true;
         else if (act === 'interact') this.actions.interact = true;
         else if (act === 'pause') this.actions.pause = true;
         else if (act === 'slot1') this.actions.slot = 1;
         else if (act === 'slot2') this.actions.slot = 2;
+        else if (act === 'slot3') this.actions.slot = 3;
       });
 
       const release = (e) => {
@@ -140,6 +143,7 @@ export class TouchControls {
           if (act === 'fire') this.fire = false;
           else if (act === 'jump') this.jump = false;
           else if (act === 'sprint') this.sprint = false;
+          else if (act === 'slide') this.slide = false;
         }
         button.classList.remove('held');
         e?.preventDefault?.();
@@ -194,6 +198,7 @@ export class TouchControls {
     this.fire = false;
     this.jump = false;
     this.sprint = false;
+    this.slide = false;
     this.stickPointer = null;
     this.lookPointer = null;
     this.moveKnob(0, 0);

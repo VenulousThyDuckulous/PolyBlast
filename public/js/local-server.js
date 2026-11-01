@@ -22,6 +22,7 @@ import {
   ZONE_PHASES,
   ZONE_START_RADIUS,
   PLAYER,
+  MELEE,
   MATCH,
   BOT_NAMES,
 } from '../server/config.js';
@@ -146,6 +147,7 @@ export class LocalMatch {
         snapshotRate: SNAPSHOT_RATE,
         arenaHalf: ARENA_HALF,
         player: PLAYER,
+        melee: MELEE,
         match: {
           countdown: MATCH.countdown,
           overDuration: MATCH.overDuration,

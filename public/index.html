@@ -38,6 +38,7 @@
       <div id="vitals">
         <div class="bar armor"><div id="armor-fill"></div></div>
         <div class="bar health"><div id="hp-fill"></div></div>
+        <div class="bar stamina"><div id="stamina-fill"></div></div>
         <div class="vitals-row">
           <span id="hp-text">100</span>
           <span class="vitals-label">HP</span>
@@ -45,10 +46,16 @@
         </div>
       </div>
 
+      <div id="finisher-prompt" class="hidden">
+        <span class="finisher-tag">FINISH</span>
+        <span id="finisher-name"></span>
+      </div>
+
       <div id="weapon-panel">
         <div id="slots">
           <div class="slot" data-slot="0"><span class="slot-key">1</span><span class="slot-name">—</span></div>
           <div class="slot" data-slot="1"><span class="slot-key">2</span><span class="slot-name">—</span></div>
+          <div class="slot melee" data-slot="2"><span class="slot-key">3</span><span class="slot-name">KNIFE</span></div>
         </div>
         <div id="ammo">
           <span id="ammo-mag">0</span><span id="ammo-sep">/</span><span id="ammo-reserve">0</span>
@@ -73,6 +80,7 @@
       <div id="killfeed"></div>
       <div id="banner" class="hidden"></div>
       <div id="vignette"></div>
+      <div id="flash"></div>
     </div>
 
     <!-- ------------------------------------------------------------------ menu -->
@@ -130,6 +138,8 @@
           <div><kbd>E</kbd> pick up</div>
           <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
           <div><kbd>Shift</kbd> sprint</div>
+          <div><kbd>Ctrl</kbd>/<kbd>C</kbd> slide</div>
+          <div><kbd>3</kbd> knife</div>
           <div><kbd>Space</kbd> jump</div>
         </div>
 
@@ -141,6 +151,8 @@
           <div><kbd>Y</kbd> pick up</div>
           <div><kbd>X</kbd> reload</div>
           <div><kbd>LB</kbd><kbd>RB</kbd> weapons</div>
+          <div><kbd>L3</kbd> slide</div>
+          <div><kbd>D-pad ↑</kbd> knife</div>
           <div><kbd>A</kbd> jump</div>
         </div>
 
@@ -150,6 +162,8 @@
           <div><kbd>FIRE</kbd> shoot</div>
           <div><kbd>PICK</kbd> loot</div>
           <div><kbd>RELOAD</kbd> reload</div>
+          <div><kbd>SLIDE</kbd> slide</div>
+          <div><kbd>KNIFE</kbd> knife</div>
           <div><kbd>JUMP</kbd> jump</div>
           <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
           <div><kbd>II</kbd> pause</div>
@@ -208,8 +222,10 @@
         <button class="tbtn" data-act="jump" aria-label="Jump">JUMP</button>
         <button class="tbtn" data-act="interact" aria-label="Pick up">PICK</button>
         <button class="tbtn" data-act="reload" aria-label="Reload">RELOAD</button>
+        <button class="tbtn" data-act="slide" aria-label="Slide">SLIDE</button>
         <button class="tbtn" data-act="slot1" aria-label="Weapon slot 1">1</button>
         <button class="tbtn" data-act="slot2" aria-label="Weapon slot 2">2</button>
+        <button class="tbtn" data-act="slot3" aria-label="Knife">KNIFE</button>
         <button class="tbtn" data-act="pause" aria-label="Pause">II</button>
       </div>
     </div>
