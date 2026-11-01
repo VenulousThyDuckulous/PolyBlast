@@ -2,11 +2,12 @@
 
 *Revised after the user chose a first-person 3D view and eventual public hosting.*
 
-**Status: v1 shipped.** Everything in this plan is built and playable at `http://localhost:3000`,
-and also as a desktop app (`npm run desktop`) — an Electron window that runs the same server
-in-process, so the game code is shared by both modes. Package installers are not set up yet;
+**Status: shipped and hosted.** Built and playable three ways: `http://localhost:3000` (real
+multiplayer), `npm run desktop` (Electron window running the server in-process), and on GitHub Pages
+as a static build where the match runs inside the page. Keyboard/mouse, controller and touchscreen are
+all supported, and the game switches between them by itself. Package installers are not set up yet;
 see [README.md](README.md) for run/play/tune instructions. Steps 1–7 of the build order are done, with
-the 23-check headless suite (`npm test`) passing. Deferred as planned: public hosting.
+the 23-check headless suite (`npm test`) passing.
 
 One thing the plan did not anticipate, found during playtest: an idle player was dying to bots in
 6–17 s. Two causes — bots had 360° awareness (`botFov` was defined but never used) and bot fire had
@@ -121,12 +122,28 @@ test/smoke.test.js      headless end-to-end: clients join, shoot, die, one winne
 Squads/teams, vehicles, destructible terrain, accounts/persistence/leaderboards, cross-server
 matchmaking, mobile touch controls, voice chat, cosmetics, ranked anti-cheat beyond server authority.
 
-## Public hosting later (deliberately deferred, not forgotten)
+## Public hosting
 
-The sim is transport-agnostic so it can run inside a Durable Object. Doing that means: Workers static
-assets for the client, a WebSocket ticket endpoint with a realtime binding, and the sim ticked by the
-object's alarm loop. That is a separate build step and a deployment you'd authorize explicitly — v1
-stays local/LAN so we can get the game fun first.
+**Live now:** <https://venulousthyduckulous.github.io/PolyBlast/> (GitHub Pages, repo `PolyBlast`).
+
+The transport-agnostic sim paid off here. Pages only serves files, so instead of a WebSocket server
+the match runs in the page: `public/js/local-server.js` mirrors the server's join/input/tick/snapshot
+loop and feeds the client through a socket-shaped object, so `Net` and everything above it are
+unchanged. `npm run build` produces `dist/` (three.js vendored, all paths relative, plus an
+`offline.json` marker) and `npm run deploy` force-pushes it to `gh-pages`.
+
+Consequence to remember: **Pages is single-player against bots.** Real multiplayer still needs the
+Node server. Hosting that means the Durable Object step below — Workers static assets for the client,
+a WebSocket ticket endpoint with a realtime binding, and the sim ticked by the object's alarm loop.
+
+## Multi-device input
+
+Input is arbitrated in one place (`public/js/devices.js`): platform detection seeds the default
+(touch on phones/tablets, keyboard on desktop) and then last input wins. A controller appearing or
+being used takes over; touching the screen takes it back; a key or click takes it back again. This is
+why the touch layer renders on top of the canvas as DOM rather than inside it — it can be hidden
+entirely while a pad is driving, and the window-level touch listener still notices the tap that
+reclaims control.
 
 ## How we'll know it works
 

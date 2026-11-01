@@ -17,6 +17,31 @@ npm start         # browser mode: open http://localhost:3000 and hit DROP IN
 npm run dev       # browser mode, restarting on server file changes
 ```
 
+### Hosted on GitHub Pages
+
+**<https://venulousthyduckulous.github.io/PolyBlast/>**
+
+GitHub Pages only serves files — it cannot run the Node server, so there is no WebSocket match to
+join. The simulation was written free of Node APIs, so the same match runs **inside the page**
+instead: you drop in against the bots, and everything else is identical.
+
+That is what the client does automatically. It looks for an `offline.json` marker (written by the
+static build); if it finds one it starts a local match immediately, and otherwise it tries a real
+server first and only falls back if none answers. So the same code plays offline on Pages, solo in
+the desktop app, and genuinely multiplayer under `npm start`.
+
+```bash
+npm run build     # -> dist/ : the whole game, three.js vendored, all paths relative
+npm run deploy    # build, then force-push dist/ to the gh-pages branch
+```
+
+The build is deliberately dumb: it copies files, writes `.nojekyll` and `offline.json`, and vendors
+the three.js ESM build. There is no bundler step and no CI, so what you test locally is what ships.
+Everything is referenced relatively, which is what makes the `/PolyBlast/` subpath work.
+
+**Offline means no other humans.** On Pages you are playing against bots. Real multiplayer needs the
+Node server, either locally or somewhere that can run it.
+
 ### Desktop app
 
 `npm run desktop` launches the game in its own window via Electron. The window is just a shell: the
@@ -41,6 +66,20 @@ browser mode joins the desktop app's match the same way, as long as they can rea
 
 ## Controls
 
+The game works out what you are playing on and switches to match. The rule is **last input wins**,
+seeded by the platform:
+
+| You are on | Default | Then |
+| --- | --- | --- |
+| Phone or tablet | Touchscreen | A connected controller takes over; touching the screen takes it back |
+| Desktop | Keyboard + mouse | A controller takes over as soon as it is used; a key or click takes it back |
+
+The lobby tells you which one is live, and a controller being plugged in or removed is picked up
+immediately. Tapping the screen while a controller is driving hands control back to touch, and any
+controller button hands it back to the controller — so the two never fight over the same stick.
+
+**Keyboard + mouse**
+
 | Input | Action |
 | --- | --- |
 | `W` `A` `S` `D` | Move |
@@ -51,7 +90,34 @@ browser mode joins the desktop app's match the same way, as long as they can rea
 | `R` | Reload |
 | `E` | Pick up / swap weapon |
 | `1` `2` | Weapon slots |
-| `Esc` | Release mouse (pause overlay) |
+| `Esc` | Pause / release mouse |
+
+**Controller** (standard mapping — Xbox layout names, any pad should do)
+
+| Input | Action |
+| --- | --- |
+| Left stick | Move |
+| Right stick | Look |
+| `RT` | Fire |
+| `LT` | Sprint |
+| `A` | Jump |
+| `X` | Reload |
+| `Y` | Pick up / swap weapon |
+| `LB` `RB` | Weapon slots |
+| `Start` | Pause |
+
+**Touchscreen** (landscape recommended)
+
+| Input | Action |
+| --- | --- |
+| Left thumb stick | Move |
+| Drag anywhere else | Look |
+| `FIRE` / `JUMP` / `RELOAD` / `PICK` | Actions |
+| `1` `2` | Weapon slots |
+| `II` | Pause |
+
+The stick and the look drag track separate fingers, so you can run and aim at once. The HUD moves
+itself out of the thumb zones and respects notched-screen safe areas.
 
 ## How a match plays
 
@@ -104,8 +170,20 @@ server/world.js         seeded map generation, AABB collision, raycasts, spawn/l
 server/sim.js           authoritative match: players, movement, damage, loot, zone, win condition
 server/bots.js          bot decision making
 server/index.js         static file server, WebSocket room, 30 Hz tick / 20 Hz snapshot loops
-public/                 Three.js client: scene, input, netcode, HUD, minimap, procedural SFX
+public/js/local-server.js  the same match driven in-page, for static hosting (no sockets)
+public/js/net.js        transport: real server, or the local match; snapshot interpolation
+public/js/devices.js    platform detection, gamepad polling, which device is driving
+public/js/touch.js      thumbstick, look drag and action buttons
+public/js/input.js      turns any device into one stream of intents
+public/js/main.js       frame loop, view assembly, events -> effects
+scripts/build-static.mjs   dist/ for GitHub Pages
+scripts/deploy-pages.mjs   publish dist/ to the gh-pages branch
 ```
+
+**One simulation, two transports.** `public/js/local-server.js` mirrors what `server/index.js` does
+over sockets — join, input, tick, snapshot — but delivers the messages through a socket-shaped object
+that never touches the network. `Net` cannot tell the difference, so offline play runs the identical
+client code path as real multiplayer, including interpolation.
 
 **Authority.** Clients send intents only (`yaw`, `pitch`, movement axes, `fire`, `reload`, `interact`,
 `slot`). Position, health, hits, pickups, deaths and the winner are resolved on the server. Every shot
@@ -123,5 +201,6 @@ ticked by the object's alarm loop) is a transport swap, not a rewrite.
 
 ## Not in v1
 
-Squads, vehicles, destructible terrain, accounts and leaderboards, cross-server matchmaking, mobile
-touch controls, voice chat, cosmetics.
+Squads, vehicles, destructible terrain, accounts and leaderboards, cross-server matchmaking, voice
+chat, cosmetics, and hosted multiplayer (Pages is single-player against bots; the roadmap for real
+hosting is the Durable Object transport swap described above).
