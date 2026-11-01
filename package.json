@@ -1,0 +1,23 @@
+{
+  "name": "last-circle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Last Circle - a low-poly first-person multiplayer battle royale",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "desktop": "electron .",
+    "test": "node test/smoke.test.js",
+    "build": "node scripts/build-static.mjs",
+    "deploy": "node scripts/build-static.mjs && node scripts/deploy-pages.mjs"
+  },
+  "dependencies": {
+    "three": "^0.187.0",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1"
+  }
+}
