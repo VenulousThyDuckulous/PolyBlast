@@ -19,6 +19,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readDomain, CNAME_FILE } from './domain.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist');
@@ -56,6 +57,12 @@ async function main() {
 
   // Keep Jekyll's fingers off the output.
   await fs.writeFile(path.join(OUT, '.nojekyll'), '');
+
+  // A published CNAME file is what makes Pages serve the custom domain, and deploy-pages.mjs
+  // force-pushes a branch rebuilt from this directory — so the file is re-created from the repo
+  // copy on every build, or the domain would be dropped by the next deploy.
+  const domain = await readDomain(ROOT);
+  if (domain) await fs.writeFile(path.join(OUT, CNAME_FILE), `${domain}\n`);
 
   // Tells the client it is a static bundle: no server to join, so the match runs in the page.
   // Stamped into the HTML so the decision costs no request.
@@ -95,6 +102,8 @@ async function main() {
   ).reduce((a, b) => a + b, 0);
 
   console.log(`static build: ${report.length} files, ${(bytes / 1024 / 1024).toFixed(2)} MB -> ${path.relative(ROOT, OUT)}`);
+  if (domain) console.log(`  custom domain: ${domain} (${CNAME_FILE} written)`);
+  else console.log('  no domain configured — the site is served from its github.io address');
   console.log('  open index.html over http (file:// blocks ES modules)');
 }
 

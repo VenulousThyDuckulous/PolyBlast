@@ -11,7 +11,8 @@
     "desktop": "electron .",
     "test": "node test/smoke.test.js",
     "build": "node scripts/build-static.mjs",
-    "deploy": "node scripts/build-static.mjs && node scripts/deploy-pages.mjs"
+    "deploy": "node scripts/build-static.mjs && node scripts/deploy-pages.mjs",
+    "domain": "node scripts/set-domain.mjs"
   },
   "dependencies": {
     "three": "^0.187.0",

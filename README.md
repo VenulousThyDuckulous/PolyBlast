@@ -33,6 +33,7 @@ the desktop app, and genuinely multiplayer under `npm start`.
 ```bash
 npm run build     # -> dist/ : the whole game, three.js vendored, all paths relative
 npm run deploy    # build, then force-push dist/ to the gh-pages branch
+npm run domain    # point the published site at its own domain (see below)
 ```
 
 The build is deliberately dumb: it copies files, writes `.nojekyll` and `offline.json`, and vendors
@@ -41,6 +42,57 @@ Everything is referenced relatively, which is what makes the `/PolyBlast/` subpa
 
 **Offline means no other humans.** On Pages you are playing against bots. Real multiplayer needs the
 Node server, either locally or somewhere that can run it.
+
+### A free domain with HTTPS
+
+The short version: **`polyblast.is-a.dev`** — free, no card, and HTTPS comes from GitHub Pages itself.
+
+Every asset in the build is referenced relatively, so the game already runs at a domain root; the
+same bundle serves `/PolyBlast/`, `/`, or anything else without changes. What a domain needs is DNS
+and a published `CNAME` file.
+
+**1. Claim the name.** [is-a.dev](https://www.is-a.dev) hands out subdomains for software projects in
+exchange for a pull request to [is-a-dev/register](https://github.com/is-a-dev/register) — there is
+no account and no signup form, just a file called `domains/polyblast.json`:
+
+```json
+{
+  "owner": { "username": "VenulousThyDuckulous" },
+  "records": { "CNAME": "venulousthyduckulous.github.io" }
+}
+```
+
+A volunteer merges it, usually within a day, and the record appears minutes later. **Your PR is the
+DNS** — the CNAME is created for you, so there is nothing to configure at a registrar. Note the
+`github.io` host has no repo name in it.
+
+**2. Configure it here.**
+
+```bash
+npm run domain polyblast.is-a.dev
+```
+
+That writes `CNAME` in the repo root and prints the records and the remaining steps. Change or drop
+the domain at any time with the same command, or `npm run domain -- --clear`.
+
+**3. Publish — but only once the name resolves.** This is the trap worth knowing about: a published
+`CNAME` moves the site to that domain and *away* from `venulousthyduckulous.github.io/PolyBlast/`.
+Deploy before DNS is live and the game has no working address at all, not merely a missing domain.
+So `npm run deploy` checks the name first and refuses with an explanation rather than taking the site
+down; `npm run deploy -- --force` overrides it if you know better.
+
+**4. Turn on HTTPS.** Settings → Pages → *Enforce HTTPS*. GitHub requests a Let's Encrypt certificate
+as soon as the domain resolves and uploads it automatically; it can take up to 24 hours to become
+available. Nothing in the repo decides this — it is repository configuration, like the domain itself.
+
+**Verify the domain while you are there.** GitHub offers a TXT record showing you control the name;
+is-a.dev accepts it in a second PR, as `domains/_github-pages-challenge-venulousthyduckulous.polyblast.json`.
+It is what stops someone else claiming the same name on GitHub if the DNS record ever lapses.
+
+Other free options, and why they are second choice: [js.org](https://js.org) is free and fast but
+only accepts projects that *are* part of the JavaScript ecosystem rather than merely built in it;
+DigitalPlat's `.dpdns.org` names are free without a PR but need an account and Cloudflare nameservers,
+and their terms disclaim permanence; `eu.org` is free and stable but human-reviewed, taking weeks.
 
 ### Desktop app
 
