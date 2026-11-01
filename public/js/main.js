@@ -11,6 +11,7 @@ import { Net } from './net.js';
 import { Hud } from './hud.js';
 import { Sfx } from './sfx.js';
 import { DEVICE } from './devices.js';
+import { AvatarEditor } from './editor.js';
 
 const canvas = document.getElementById('scene');
 const renderer = new Renderer(canvas);
@@ -18,6 +19,7 @@ const input = new Input(canvas);
 const net = new Net();
 const hud = new Hud();
 const sfx = new Sfx();
+const editor = new AvatarEditor();
 
 const lobby = document.getElementById('lobby');
 const joinForm = document.getElementById('join-form');
@@ -52,7 +54,7 @@ let stepTimer = 0;
 let countdownBeep = 99;
 let lastAlive = true;
 
-nameInput.value = localStorage.getItem('lastcircle-name') || '';
+nameInput.value = localStorage.getItem('polyblast-name') || localStorage.getItem('lastcircle-name') || '';
 
 // ------------------------------------------------------------------ connection
 
@@ -60,7 +62,7 @@ joinForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = nameInput.value.trim() || `Player ${Math.floor(Math.random() * 900 + 100)}`;
   nameInput.value = name;
-  localStorage.setItem('lastcircle-name', name);
+  localStorage.setItem('polyblast-name', name);
 
   sfx.init();
   playBtn.disabled = true;
@@ -68,7 +70,7 @@ joinForm.addEventListener('submit', async (e) => {
   lobbyError.textContent = '';
 
   try {
-    const welcome = await net.connect(name);
+    const welcome = await net.connect(name, editor.avatar);
     config = welcome.config;
     hud.setSelfId(welcome.id);
     net.push(welcome.state);
@@ -124,10 +126,20 @@ reloadBtn.addEventListener('click', () => location.reload());
 
 // ------------------------------------------------------------------ pointer lock / pause
 
+/** True while the local player still has a body in the match. */
+function selfAlive() {
+  return !!net.you?.alive;
+}
+
 input.onLockChange = (locked) => {
   // Only the desktop cursor can be locked; on touch/pad the pause overlay is driven explicitly.
   if (phase !== 'playing' || input.devices.platform === 'mobile') return;
   if (input.devices.active !== DEVICE.KEYBOARD) return;
+  // A spectator has nothing to pause, and the overlay would cover the death screen.
+  if (!selfAlive()) {
+    paused.classList.add('hidden');
+    return;
+  }
   paused.classList.toggle('hidden', locked);
 };
 
@@ -137,7 +149,7 @@ function resume() {
 }
 
 function togglePause() {
-  if (phase !== 'playing') return;
+  if (phase !== 'playing' || !selfAlive()) return;
   if (paused.classList.contains('hidden')) {
     paused.classList.remove('hidden');
     input.exitLock();
@@ -392,6 +404,8 @@ function frame(now) {
     renderer.update(view, dt);
     hud.update(view, dt);
     updateAmbient(view, dt);
+    // Dying while paused (or losing pointer lock mid-death) must not leave the overlay up.
+    if (!view.me.alive && !paused.classList.contains('hidden')) paused.classList.add('hidden');
   }
 
   renderer.render();
@@ -448,6 +462,7 @@ window.__lc = {
   renderer,
   input,
   hud,
+  editor,
   devices: input.devices,
   touch: input.touch,
   get state() {

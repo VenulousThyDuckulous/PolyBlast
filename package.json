@@ -1,9 +1,9 @@
 {
-  "name": "last-circle",
+  "name": "polyblast",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Last Circle - a low-poly first-person multiplayer battle royale",
+  "description": "PolyBlast - a low-poly first-person multiplayer battle royale with avatars",
   "main": "electron/main.js",
   "scripts": {
     "start": "node server/index.js",

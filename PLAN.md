@@ -1,4 +1,4 @@
-# Plan v2: Last Circle — 3D low-poly multiplayer battle royale
+# Plan v2: PolyBlast — 3D low-poly multiplayer battle royale
 
 *Revised after the user chose a first-person 3D view and eventual public hosting.*
 
@@ -6,7 +6,9 @@
 multiplayer), `npm run desktop` (Electron window running the server in-process), and on GitHub Pages
 as a static build where the match runs inside the page. Keyboard/mouse, controller and touchscreen are
 all supported, and the game switches between them by itself. Package installers are not set up yet;
-see [README.md](README.md) for run/play/tune instructions. Steps 1–7 of the build order are done, with
+see [README.md](README.md) for run/play/tune instructions. Each player now has a customisable
+avatar (body colour, trim, hat) that bots randomise, and the lobby has a live 3D preview of it.
+Steps 1–7 of the build order are done, with
 the 23-check headless suite (`npm test`) passing.
 
 One thing the plan did not anticipate, found during playtest: an idle player was dying to bots in

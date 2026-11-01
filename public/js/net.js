@@ -16,24 +16,17 @@ const INTERP_DELAY = 0.11;
 const OPEN = 1;
 
 /**
- * True when the page is the static bundle (scripts/build-static.mjs writes offline.json).
- * Asking for it costs one tiny request and avoids waiting on a socket that cannot be there.
+ * True when the page is the static bundle: scripts/build-static.mjs stamps this meta tag into the
+ * copy of index.html it publishes. Reading it is synchronous, so joining never waits on a probe
+ * request - that probe used to add seconds to the first join on a slow connection.
  */
-async function isStaticBuild() {
+const STATIC_BUILD = (() => {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch(new URL('offline.json', document.baseURI), {
-      method: 'HEAD',
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    return res.ok;
+    return document.querySelector('meta[name="polyblast-mode"]')?.content === 'offline';
   } catch {
     return false;
   }
-}
+})();
 /** How long to wait for a real server before deciding to play the match locally. */
 const REMOTE_TIMEOUT = 2500;
 
@@ -46,6 +39,8 @@ export class Net {
     this.ws = null;
     this.offline = false;
     this.id = null;
+    // Start loading the in-page match now so a fallback (or a static build) joins instantly.
+    this.localModule = import('./local-server.js').catch(() => null);
     this.config = null;
     this.you = null;
     this.entries = [];
@@ -64,32 +59,32 @@ export class Net {
    * Join a match: a real server if one answers, otherwise a local one.
    * Resolves with the welcome message. `this.offline` says which happened.
    */
-  async connect(name) {
-    // A static build ships this marker, so it does not waste a timeout on a socket that cannot exist.
-    if (await isStaticBuild()) return this.connectLocal(name);
+  async connect(name, avatar) {
+    // A static build has no server to join, so do not waste a timeout on a socket that cannot exist.
+    if (STATIC_BUILD) return this.connectLocal(name, avatar);
     try {
-      return await this.connectRemote(name);
+      return await this.connectRemote(name, avatar);
     } catch {
       // No server (it is down, or blocked): run the match in this tab instead.
-      return this.connectLocal(name);
+      return this.connectLocal(name, avatar);
     }
   }
 
-  async connectLocal(name) {
-    const { createLocalSocket } = await import('./local-server.js');
+  async connectLocal(name, avatar) {
+    const mod = (await this.localModule) || (await import('./local-server.js'));
     this.offline = true;
-    return this.attach(createLocalSocket(), name, 8000);
+    return this.attach(mod.createLocalSocket(), name, 8000, avatar);
   }
 
-  connectRemote(name) {
+  connectRemote(name, avatar) {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = `${proto}//${location.host}`;
     this.offline = false;
-    return this.attach(new WebSocket(url), name, REMOTE_TIMEOUT);
+    return this.attach(new WebSocket(url), name, REMOTE_TIMEOUT, avatar);
   }
 
   /** Run the join handshake over any socket-shaped transport. */
-  attach(ws, name, timeoutMs) {
+  attach(ws, name, timeoutMs, avatar) {
     return new Promise((resolve, reject) => {
       let settled = false;
       this.ws = ws;
@@ -107,7 +102,7 @@ export class Net {
       }, timeoutMs);
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ t: 'join', name }));
+        ws.send(JSON.stringify({ t: 'join', name, avatar }));
       };
 
       ws.onmessage = (ev) => {

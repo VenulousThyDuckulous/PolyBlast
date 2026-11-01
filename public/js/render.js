@@ -5,6 +5,9 @@
 
 import * as THREE from 'three';
 
+import { HATS } from '../shared/avatar.js';
+import { createAvatar } from './avatar-mesh.js';
+
 const EYE = 1.62;
 const ZONE_HEIGHT = 26;
 const TRACER_MAX = 96;
@@ -310,34 +313,19 @@ export class Renderer {
   // ------------------------------------------------------------------ players
 
   playerMesh(p) {
+    // Rebuild when the avatar changes; otherwise keep the existing body.
+    const key = `${p.c}|${p.ac}|${p.h}`;
     let entry = this.players.get(p.id);
-    if (entry) return entry;
+    if (entry && entry.key === key) return entry;
+    if (entry) {
+      this.disposePlayer(p.id);
+      entry = null;
+    }
 
     const group = new THREE.Group();
-    const color = new THREE.Color(p.c);
-
-    const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.08, flatShading: true });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.33, 0.92, 4, 10), bodyMat);
-    body.position.y = 0.85;
-    group.add(body);
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 8), bodyMat);
-    head.position.y = 1.77;
-    group.add(head);
-
-    const visor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 0.09, 0.08),
-      new THREE.MeshStandardMaterial({ color: 0x0d1420, roughness: 0.4, metalness: 0.4 }),
-    );
-    visor.position.set(0, 1.79, -0.18);
-    group.add(visor);
-
-    const gun = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.11, 0.46),
-      new THREE.MeshStandardMaterial({ color: 0x2a3444, roughness: 0.7 }),
-    );
-    gun.position.set(0.26, 1.16, -0.34);
-    group.add(gun);
+    const built = createAvatar({ body: p.c, accent: p.ac, hat: HATS[p.h]?.id || 'none' });
+    group.add(built.group);
+    const gun = built.gun;
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.5, 16),
@@ -366,7 +354,8 @@ export class Renderer {
         map: labelTexture(p.n, p.c),
         transparent: true,
         depthWrite: false,
-        depthTest: false,
+        // Occluded by geometry: names drawn through walls gave away everyone's position.
+        depthTest: true,
       }),
     );
     sprite.scale.set(2.2, 0.55, 1);
@@ -374,9 +363,24 @@ export class Renderer {
     group.add(sprite);
 
     this.scene.add(group);
-    entry = { group, shield, sprite, gun, name: p.n, visible: true };
+    entry = { group, shield, sprite, gun, key, name: p.n, visible: true };
     this.players.set(p.id, entry);
     return entry;
+  }
+
+  /** Remove one player's meshes and free their GPU resources. */
+  disposePlayer(id) {
+    const entry = this.players.get(id);
+    if (!entry) return;
+    this.scene.remove(entry.group);
+    entry.group.traverse((o) => {
+      o.geometry?.dispose?.();
+      if (o.material) {
+        o.material.map?.dispose?.();
+        o.material.dispose?.();
+      }
+    });
+    this.players.delete(id);
   }
 
   // ------------------------------------------------------------------ effects
@@ -468,27 +472,22 @@ export class Renderer {
       if (p.id === this.selfId) continue;
       seen.add(p.id);
       const entry = this.playerMesh(p);
-      entry.group.visible = !!p.alive;
-      if (!p.alive) continue;
+      // Snapshots flag liveness as `al`; using `alive` here left every other player invisible.
+      entry.group.visible = !!p.al;
+      if (!p.al) continue;
       entry.group.position.set(p.x, p.y, p.z);
       entry.group.rotation.y = p.yaw;
       entry.shield.visible = !!p.sh && p.al;
+      // Straight above someone standing in your face the name tag fills half the screen.
+      const near = (p.x - view.me.x) ** 2 + (p.z - view.me.z) ** 2 < 2.4 * 2.4;
+      entry.sprite.visible = !near;
       // Gun length hints at what they're holding.
       const look = WEAPON_LOOK[p.w || 'unarmed'];
       entry.gun.scale.z = (look.length / 0.46) * 1.0;
       entry.gun.material.color.setHex(look.color);
     }
-    for (const [id, entry] of this.players) {
-      if (seen.has(id)) continue;
-      this.scene.remove(entry.group);
-      entry.group.traverse((o) => {
-        o.geometry?.dispose?.();
-        if (o.material && o.material !== this.gunMaterial) {
-          o.material.map?.dispose?.();
-          o.material.dispose?.();
-        }
-      });
-      this.players.delete(id);
+    for (const id of [...this.players.keys()]) {
+      if (!seen.has(id)) this.disposePlayer(id);
     }
   }
 

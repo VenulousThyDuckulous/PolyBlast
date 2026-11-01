@@ -1,5 +1,5 @@
 /**
- * Desktop shell for Last Circle.
+ * Desktop shell for PolyBlast.
  *
  * The game itself is unchanged: this process starts the same HTTP + WebSocket server in-process and
  * points a native window at it, so the exact client that runs in a browser runs here too. Running the
@@ -23,7 +23,7 @@ async function bootServer() {
     return await startServer(PREFERRED_PORT);
   } catch (err) {
     if (err && err.code !== 'EADDRINUSE') throw err;
-    console.warn(`[last-circle] port ${PREFERRED_PORT} is in use; starting on a free port instead`);
+    console.warn(`[polyblast] port ${PREFERRED_PORT} is in use; starting on a free port instead`);
     return startServer(0);
   }
 }
@@ -35,7 +35,7 @@ function createWindow(url) {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: WINDOW_BACKGROUND,
-    title: 'Last Circle',
+    title: 'PolyBlast',
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -62,7 +62,7 @@ function createWindow(url) {
   mainWindow.loadURL(url);
 }
 
-app.setName('Last Circle');
+app.setName('PolyBlast');
 
 app.whenReady().then(async () => {
   // Mouse look needs pointer lock. Grant only that, not the whole permission set.
@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
   try {
     gameServer = await bootServer();
   } catch (err) {
-    dialog.showErrorBox('Last Circle could not start', `The game server failed to start:\n\n${err.message}`);
+    dialog.showErrorBox('PolyBlast could not start', `The game server failed to start:\n\n${err.message}`);
     app.quit();
     return;
   }

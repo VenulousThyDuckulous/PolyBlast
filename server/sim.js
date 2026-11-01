@@ -12,10 +12,10 @@ import {
   ZONE_START_RADIUS,
   ZONE_PHASES,
   MATCH,
-  PLAYER_COLORS,
 } from './config.js';
 import { SIM } from './config.js';
 import { PHASE, SLOTS, clamp, clamp01, lerp, aimDir } from '../shared/protocol.js';
+import { DEFAULT_AVATAR, HATS, avatarLook, sanitizeAvatar } from '../shared/avatar.js';
 import {
   generateWorld,
   makeRng,
@@ -80,9 +80,11 @@ function makeZone() {
 
 // ---------------------------------------------------------------- players
 
-export function addPlayer(match, { id, name, bot = false }) {
+export function addPlayer(match, { id, name, bot = false, avatar = DEFAULT_AVATAR }) {
   if (match.players.size >= MATCH.maxPlayers) return null;
-  const color = PLAYER_COLORS[match.nextColor % PLAYER_COLORS.length];
+  // Avatars are validated here, not at the transport: nothing downstream can hold an illegal one.
+  const look = avatarLook(avatar);
+  const color = look.body;
   match.nextColor++;
 
   const spawn = findSpawn(match);
@@ -91,6 +93,9 @@ export function addPlayer(match, { id, name, bot = false }) {
     name,
     bot,
     color,
+    avatar: sanitizeAvatar(avatar),
+    accent: look.accent,
+    hat: HATS.findIndex((h) => h.id === look.hat),
     pos: { x: spawn.x, y: 0, z: spawn.z },
     vel: { x: 0, y: 0, z: 0 },
     yaw: spawn.yaw,
@@ -808,6 +813,9 @@ export function buildSnapshot(match) {
       al: p.alive ? 1 : 0,
       k: p.kills,
       w: held ? held.kind : null,
+      // Avatar: accent hex + hat index. `c` above is the body colour.
+      ac: p.accent,
+      h: p.hat,
       s: p.slot,
       sh: p.spawnShield > 0 ? 1 : 0,
       rel: p.reload ? Math.max(0, Math.round((p.reload.endsAt - match.time) * 100) / 100) : 0,

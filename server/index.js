@@ -1,5 +1,5 @@
 /**
- * HTTP + WebSocket transport for Last Circle.
+ * HTTP + WebSocket transport for PolyBlast.
  *
  * This is the only file that knows about Node, sockets or the clock. The game itself lives in
  * sim.js/world.js/bots.js, which is what makes a later move to a hosted Durable Object a transport
@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 import { MSG, PHASE, sanitizeInput } from '../shared/protocol.js';
+import { randomAvatar } from '../shared/avatar.js';
 import {
   TICK_RATE,
   TICK_DT,
@@ -120,9 +121,9 @@ function sanitizeName(raw, fallback) {
   return cleaned || fallback;
 }
 
-function addHuman(ws, name) {
+function addHuman(ws, name, avatar) {
   const id = `p${nextId++}`;
-  const p = addPlayer(match, { id, name, bot: false });
+  const p = addPlayer(match, { id, name, bot: false, avatar });
   if (!p) return null;
   if (match.phase === PHASE.LIVE) p.spawnShield = PLAYER.spawnShield;
   if (match.phase === PHASE.OVER) p.alive = false;
@@ -163,12 +164,12 @@ function addBot() {
   const name = BOT_NAMES.find((n) => !used.has(n));
   if (!name) return false;
   const id = `b${nextId++}`;
-  const p = addPlayer(match, { id, name, bot: true });
+  const p = addPlayer(match, { id, name, bot: true, avatar: randomAvatar() });
   return !!p;
 }
 
 function log(...args) {
-  console.log(`[last-circle]`, ...args);
+  console.log(`[polyblast]`, ...args);
 }
 
 // ------------------------------------------------------------------ websocket
@@ -193,7 +194,7 @@ wss.on('connection', (ws) => {
     if (msg.t === MSG.JOIN) {
       if (clients.has(ws)) return;
       const fallback = `Player ${nextId}`;
-      if (!addHuman(ws, sanitizeName(msg.name, fallback))) {
+      if (!addHuman(ws, sanitizeName(msg.name, fallback), msg.avatar)) {
         ws.send(JSON.stringify({ t: 'error', reason: 'Server is full' }));
         ws.close();
       }
@@ -332,7 +333,7 @@ export function startServer(port = PORT) {
       server.off('error', onError);
       const actual = server.address().port;
       startLoops();
-      log(`Last Circle running at http://localhost:${actual}`);
+      log(`PolyBlast running at http://localhost:${actual}`);
       for (const ip of lanAddresses()) log(`  LAN:    http://${ip}:${actual}`);
       log(`  arena:  ${ARENA_HALF * 2}x${ARENA_HALF * 2}, ${match.world.boxes.length} solid boxes, seed ${match.seed}`);
       resolve({ port: actual, url: `http://localhost:${actual}`, close: stopServer });
@@ -382,7 +383,7 @@ if (enteredDirectly) {
   process.on('SIGTERM', shutdown);
 
   startServer(PORT).catch((err) => {
-    console.error(`[last-circle] could not start on port ${PORT}: ${err.message}`);
+    console.error(`[polyblast] could not start on port ${PORT}: ${err.message}`);
     process.exit(1);
   });
 }

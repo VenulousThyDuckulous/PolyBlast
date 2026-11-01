@@ -1,4 +1,4 @@
-# Last Circle
+# PolyBlast
 
 A first-person, low-poly battle royale that runs on your machine. Drop in unarmed, scavenge a gun,
 stay inside the circle, and be the last player standing.
@@ -12,7 +12,7 @@ stay inside the circle, and be the last player standing.
 ```bash
 npm install       # first time only
 
-npm run desktop   # desktop app: a Last Circle window, no browser needed
+npm run desktop   # desktop app: a PolyBlast window, no browser needed
 npm start         # browser mode: open http://localhost:3000 and hit DROP IN
 npm run dev       # browser mode, restarting on server file changes
 ```
@@ -63,6 +63,16 @@ browser mode joins the desktop app's match the same way, as long as they can rea
 
 > The page needs a mouse to aim. If a browser blocks pointer lock, you can still move and shoot —
 > only the mouse look requires the lock.
+
+## Your character
+
+The lobby has a character editor: pick a body colour, a trim colour and a hat, and the model on the
+turntable is exactly what other players see (the same mesh builder draws them in the match). Bots get
+randomised avatars, so the lobby and the battlefield are full of different silhouettes.
+
+Avatars are three indices ([`shared/avatar.js`](shared/avatar.js)), validated on join by
+`sanitizeAvatar`, so a hand-crafted join packet can only choose from the published lists. The choice
+is saved in `localStorage` and sent with the join packet.
 
 ## Controls
 
@@ -165,6 +175,7 @@ and receiving state.
 ```
 electron/main.js        desktop shell: boots the server in-process, opens the game window
 shared/protocol.js      message shapes + constants shared by both sides
+shared/avatar.js        avatar lists + validation, shared by client and server
 server/config.js        every tunable
 server/world.js         seeded map generation, AABB collision, raycasts, spawn/loot placement
 server/sim.js           authoritative match: players, movement, damage, loot, zone, win condition
@@ -172,6 +183,8 @@ server/bots.js          bot decision making
 server/index.js         static file server, WebSocket room, 30 Hz tick / 20 Hz snapshot loops
 public/js/local-server.js  the same match driven in-page, for static hosting (no sockets)
 public/js/net.js        transport: real server, or the local match; snapshot interpolation
+public/js/avatar-mesh.js   the low-poly character, built from primitives
+public/js/editor.js     lobby character editor + 3D preview
 public/js/devices.js    platform detection, gamepad polling, which device is driving
 public/js/touch.js      thumbstick, look drag and action buttons
 public/js/input.js      turns any device into one stream of intents

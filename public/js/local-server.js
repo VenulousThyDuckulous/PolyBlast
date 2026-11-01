@@ -12,6 +12,7 @@
  */
 
 import { MSG, PHASE, sanitizeInput } from '../shared/protocol.js';
+import { randomAvatar } from '../shared/avatar.js';
 import {
   TICK_RATE,
   TICK_DT,
@@ -112,7 +113,7 @@ export class LocalMatch {
     if (msg.t === MSG.JOIN) {
       if (socket === this.socket) return;
       const name = typeof msg.name === 'string' ? msg.name.trim().slice(0, 14) || 'Player' : 'Player';
-      if (!this.addHuman(socket, name)) {
+      if (!this.addHuman(socket, name, msg.avatar)) {
         socket.deliver({ t: 'error', reason: 'The match is full' });
       }
       return;
@@ -125,9 +126,9 @@ export class LocalMatch {
     }
   }
 
-  addHuman(socket, name) {
+  addHuman(socket, name, avatar) {
     const id = `p${this.nextId++}`;
-    const p = addPlayer(this.match, { id, name, bot: false });
+    const p = addPlayer(this.match, { id, name, bot: false, avatar });
     if (!p) return false;
 
     if (this.match.phase === PHASE.LIVE) p.spawnShield = PLAYER.spawnShield;
@@ -219,7 +220,7 @@ export class LocalMatch {
     const used = new Set([...this.match.players.values()].map((p) => p.name));
     const name = BOT_NAMES.find((n) => !used.has(n));
     if (!name) return false;
-    return !!addPlayer(this.match, { id: `b${this.nextId++}`, name, bot: true });
+    return !!addPlayer(this.match, { id: `b${this.nextId++}`, name, bot: true, avatar: randomAvatar() });
   }
 
   broadcast() {

@@ -8,7 +8,7 @@
  *   dist/index.html          the page
  *   dist/style.css
  *   dist/js/*.js             client modules
- *   dist/shared/protocol.js  protocol constants
+ *   dist/shared/*.js         protocol + avatar model
  *   dist/server/*.js         the sim, so the match can run in the browser
  *   dist/vendor/three/*      the three.js ESM build
  *
@@ -43,8 +43,8 @@ async function main() {
 
   await copyDir(path.join(ROOT, 'public'), OUT);
 
-  await fs.mkdir(path.join(OUT, 'shared'), { recursive: true });
-  await fs.copyFile(path.join(ROOT, 'shared', 'protocol.js'), path.join(OUT, 'shared', 'protocol.js'));
+  // Everything shared between client and server (protocol, avatar model).
+  await copyDir(path.join(ROOT, 'shared'), path.join(OUT, 'shared'));
 
   await fs.mkdir(path.join(OUT, 'server'), { recursive: true });
   for (const file of SERVER_FILES) {
@@ -58,6 +58,17 @@ async function main() {
   await fs.writeFile(path.join(OUT, '.nojekyll'), '');
 
   // Tells the client it is a static bundle: no server to join, so the match runs in the page.
+  // Stamped into the HTML so the decision costs no request.
+  const indexPath = path.join(OUT, 'index.html');
+  const html = await fs.readFile(indexPath, 'utf8');
+  const tagged = html.replace(
+    '</head>',
+    '  <meta name="polyblast-mode" content="offline" />\n  </head>',
+  );
+  if (tagged === html) throw new Error('could not stamp the offline marker into index.html');
+  await fs.writeFile(indexPath, tagged);
+
+  // Also available as a file for anything that wants to check from outside the page.
   await fs.writeFile(
     path.join(OUT, 'offline.json'),
     `${JSON.stringify(

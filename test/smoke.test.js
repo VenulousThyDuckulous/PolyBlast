@@ -1,5 +1,5 @@
 /**
- * Headless checks for Last Circle. No browser, no canvas: drives the same sim the server runs, then
+ * Headless checks for PolyBlast. No browser, no canvas: drives the same sim the server runs, then
  * opens a real WebSocket connection to a spawned server to prove the transport wires up.
  *
  *   npm test

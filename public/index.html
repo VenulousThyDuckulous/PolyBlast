@@ -8,7 +8,7 @@
     />
     <meta name="theme-color" content="#0b0f17" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>Last Circle — a battle royale</title>
+    <title>PolyBlast — a battle royale</title>
     <!-- Relative paths throughout: the game is served from a subpath on GitHub Pages. -->
     <link rel="stylesheet" href="./style.css" />
     <script type="importmap">
@@ -78,8 +78,8 @@
     <!-- ------------------------------------------------------------------ menu -->
     <div id="lobby" class="screen">
       <div class="lobby-inner">
-        <p class="eyebrow">16 players · one circle · no respawns</p>
-        <h1>LAST<span>CIRCLE</span></h1>
+        <p class="eyebrow">One circle · no respawns · last one standing</p>
+        <h1>POLY<span>BLAST</span></h1>
         <p class="tagline">
           A low-poly battle royale. Drop in unarmed, scavenge a gun, and be the last one inside the circle.
         </p>
@@ -92,6 +92,30 @@
           </div>
         </form>
         <p id="lobby-error" class="error"></p>
+
+        <div class="avatar-editor">
+          <div class="avatar-preview">
+            <canvas id="avatar-canvas" width="150" height="150"></canvas>
+          </div>
+          <div class="avatar-options">
+            <div class="avatar-row">
+              <span class="avatar-label">Body</span>
+              <div id="avatar-body" class="swatches"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label">Trim</span>
+              <div id="avatar-accent" class="swatches"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label">Hat</span>
+              <div id="avatar-hats" class="hats"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label"></span>
+              <button id="avatar-shuffle" class="ghost-btn" type="button">Shuffle</button>
+            </div>
+          </div>
+        </div>
 
         <p id="device-line" class="device-line">
           <span class="dot"></span><span id="device-name">Keyboard + mouse</span>
