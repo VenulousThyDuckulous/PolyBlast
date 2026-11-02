@@ -32,8 +32,6 @@ const SLIDE_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
 const SENSITIVITY = 0.0021;
 /** Radians per second at full stick deflection. */
 const PAD_LOOK_SPEED = 3.1;
-/** Hold-to-aim; the mouse's right button is primary, Q covers trackpads without one. */
-const SCOPE_KEYS = ['KeyQ'];
 const MAX_PITCH = Math.PI / 2 - 0.06;
 
 export class Input {
@@ -265,7 +263,7 @@ export class Input {
   get scope() {
     if (this.devices.usingTouch) return this.touch.scope;
     if (this.devices.usingGamepad && this.pad) return this.pad.scope;
-    return this.mouseScope || SCOPE_KEYS.some((code) => this.keys.has(code));
+    return this.mouseScope;
   }
 
   /** Read and clear the latched one-shot actions. */

@@ -95,7 +95,7 @@ controller button hands it back to the controller — so the two never fight ove
 | `W` `A` `S` `D` | Move |
 | Mouse | Look |
 | Left click | Fire |
-| Right click or `Q` | Scope in (sniper) |
+| Right click (hold) | Scope in (sniper) |
 | `Shift` | Sprint (drains stamina) |
 | `Ctrl` or `C` | Slide (needs sprint speed) |
 | `Space` | Jump |
