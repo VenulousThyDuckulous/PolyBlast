@@ -503,7 +503,9 @@ function sendInput(dt) {
       slide: active && input.slide,
       reload: actions.reload,
       interact: actions.interact,
-      slot: actions.slot || nextSlot(),
+      // Only an actual switch action may move the slot: sending the next slot every packet made the
+      // server flip between two guns about thirty times a second.
+      slot: actions.slot || (actions.cycle ? nextSlot() : 0),
     });
   }
 }

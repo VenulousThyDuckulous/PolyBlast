@@ -109,6 +109,19 @@ function firstConnectedPad() {
   return null;
 }
 
+/**
+ * The pad object delivered with `gamepadconnected` is a frozen snapshot in some browsers - Chrome
+ * never updates it - so reading straight from it made a connected pad look dead: right name in the
+ * lobby, every button and stick permanently zero. Always prefer the live entry for the same index,
+ * and fall back to the stored object only when the browser gives us nothing.
+ */
+function livePad(stored) {
+  if (!stored) return null;
+  const pads = navigator.getGamepads?.() ?? [];
+  const match = pads[stored.index];
+  return match && match.connected ? match : stored;
+}
+
 export class Devices {
   constructor({ onChange = null } = {}) {
     this.platform = detectPlatform();
@@ -192,8 +205,13 @@ export class Devices {
       const found = firstConnectedPad();
       if (found) this.setPad(found);
     }
-    const pad = this.pad;
+    const pad = livePad(this.pad);
     if (!pad) return null;
+    // Adopt the browser's live object without resetting the edge-detection history.
+    if (pad !== this.pad) {
+      this.pad = pad;
+      this.padName = pad.id || this.padName;
+    }
 
     // A pad that reports disconnection without an event.
     if (!pad.connected) {
