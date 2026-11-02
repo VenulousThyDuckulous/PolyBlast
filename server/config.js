@@ -84,6 +84,10 @@ export const MELEE = {
  *  head     headshot damage multiplier
  *  reserve  starting reserve ammo when picked up
  *  pickup   reserve ammo granted by an ammo crate
+ *  scope    true when the weapon has an optic the player can aim through
+ *  scopeSpread  cone (degrees) while scoped; hip fire keeps the wide `spread`
+ *  scopeFov     field of view the client zooms to while scoped
+ *  scopeSpeed   movement speed cap while scoped
  */
 export const WEAPONS = {
   pistol: {
@@ -145,6 +149,29 @@ export const WEAPONS = {
     reserve: 20,
     pickup: 16,
     color: '#8ecae6',
+  },
+  /**
+   * The sniper hits hardest and reaches the whole arena, but its hip fire is nearly useless: only
+   * the scope makes it accurate, and scoping halves how fast you can move.
+   */
+  sniper: {
+    id: 'sniper',
+    label: 'Sniper',
+    dmg: 92,
+    pellets: 1,
+    spread: 5.2,
+    rpm: 42,
+    mag: 5,
+    reload: 2.9,
+    range: 220,
+    head: 2.6,
+    reserve: 15,
+    pickup: 10,
+    color: '#c7a8ff',
+    scope: true,
+    scopeSpread: 0.05,
+    scopeFov: 24,
+    scopeSpeed: 2.6,
   },
   /**
    * Always carried, never looted: the melee slot. `melee: true` routes it through the swing path in

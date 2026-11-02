@@ -27,6 +27,7 @@ const nameInput = document.getElementById('name-input');
 const playBtn = document.getElementById('play-btn');
 const lobbyError = document.getElementById('lobby-error');
 const paused = document.getElementById('paused');
+const scopeEl = document.getElementById('scope');
 const resumeBtn = document.getElementById('resume-btn');
 const connectError = document.getElementById('connect-error');
 const connectErrorText = document.getElementById('connect-error-text');
@@ -121,6 +122,9 @@ net.onClose = () => {
   input.exitLock();
   connectError.classList.remove('hidden');
   connectErrorText.textContent = 'The server went away. Reload to drop back in.';
+  document.body.classList.remove('scoped');
+  scopeEl?.classList.add('hidden');
+  wasScoped = false;
 };
 
 reloadBtn.addEventListener('click', () => location.reload());
@@ -380,6 +384,7 @@ function buildView(dt) {
       stamina: you?.stamina ?? 100,
       staminaMax: you?.staminaMax ?? 100,
       slideReady: !you?.sliding && (you?.slideCd ?? 0) <= 0,
+      scoped: !!you?.scoped,
     },
     players,
     loot: state.loot,
@@ -423,6 +428,41 @@ function finisherTarget(state, you) {
 
 // ------------------------------------------------------------------ input
 
+let wasScoped = false;
+
+/**
+ * Drive the lens overlay, the zoomed look sensitivity and the crosshair. Nothing here changes the
+ * rules: the server decides whether the optic may come up at all.
+ */
+function applyScope(view) {
+  const scoped = !!view.me.scoped;
+  scopeEl?.classList.toggle('hidden', !scoped);
+  if (scoped !== wasScoped) {
+    wasScoped = scoped;
+    document.body.classList.toggle('scoped', scoped);
+    sfx.scope(scoped);
+  }
+  if (!scoped) {
+    input.lookScale = 1;
+    return;
+  }
+  const fov = config?.weapons?.[view.me.weapon]?.scopeFov ?? 30;
+  // Zooming magnifies every mouse count, so scale look input by the field-of-view ratio.
+  const ratio = Math.tan((fov * Math.PI) / 360) / Math.tan((78 * Math.PI) / 360);
+  input.lookScale = Math.max(0.22, Math.min(1, ratio));
+}
+
+/** Next non-empty weapon slot (1-based), for the controller's single cycle button. */
+function nextSlot() {
+  const you = net.you;
+  if (!you?.slots) return 0;
+  for (let i = 1; i <= you.slots.length; i++) {
+    const index = (you.slot + i) % you.slots.length;
+    if (you.slots[index]) return index + 1;
+  }
+  return 0;
+}
+
 function sendInput(dt) {
   inputAccumulator += dt;
   let guard = 0;
@@ -443,10 +483,11 @@ function sendInput(dt) {
       sprint: active && input.isSprinting(),
       jump: active && input.isJumping(),
       fire: active && input.fire,
+      scope: active && input.scope,
       slide: active && input.slide,
       reload: actions.reload,
       interact: actions.interact,
-      slot: actions.slot,
+      slot: actions.slot || nextSlot(),
     });
   }
 }
@@ -466,6 +507,7 @@ function frame(now) {
   if (latestState && config) {
     sendInput(dt);
     const view = buildView(dt);
+    applyScope(view);
     renderer.update(view, dt);
     hud.update(view, dt);
     updateAmbient(view, dt);

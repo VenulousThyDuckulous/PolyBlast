@@ -20,7 +20,7 @@ function standard(color, extra = {}) {
 
 /**
  * @param {{ body: string, accent: string, hat: string }} look
- * @returns {{ group: THREE.Group, gun: THREE.Mesh, bodyMaterial: THREE.Material }}
+ * @returns {{ group: THREE.Group, gunMount: THREE.Group, bodyMaterial: THREE.Material }}
  */
 export function createAvatar(look) {
   const bodyColor = new THREE.Color(look.body || '#ff6b6b');
@@ -70,17 +70,13 @@ export function createAvatar(look) {
   // ---- hat
   addHat(group, look.hat, accentMaterial, bodyMaterial);
 
-  // ---- where a weapon is held, so the renderer can swap gun shapes in
+  // ---- where a weapon is held. The renderer drops a real per-weapon model in here (see
+  // weapon-models.js), so what someone is carrying is identifiable from their silhouette.
   const gunMount = new THREE.Group();
-  gunMount.position.set(0.24, SHOULDER - 0.12, -0.34);
-  const gun = new THREE.Mesh(
-    new THREE.BoxGeometry(0.09, 0.11, 0.46),
-    new THREE.MeshStandardMaterial({ color: 0x2a3444, roughness: 0.7 }),
-  );
-  gunMount.add(gun);
+  gunMount.position.set(0.26, SHOULDER - 0.16, -0.3);
   group.add(gunMount);
 
-  return { group, gun, bodyMaterial };
+  return { group, gunMount, bodyMaterial };
 }
 
 function addHat(group, hat, accentMaterial, bodyMaterial) {

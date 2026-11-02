@@ -68,8 +68,10 @@ export class Sfx {
   }
 
   shoot(kind, distance = 0) {
-    if (distance > 70) return;
-    const falloff = Math.max(0.06, 1 - distance / 75);
+    // A sniper is heard across the arena; everything else is a much shorter, more local crack.
+    const reach = kind === 'sniper' ? 160 : 70;
+    if (distance > reach) return;
+    const falloff = Math.max(0.06, 1 - distance / (reach * 1.07));
     switch (kind) {
       case 'smg':
         this.noise({ gain: 0.45 * falloff, freq: 2600, decay: 0.05 });
@@ -82,6 +84,12 @@ export class Sfx {
       case 'rifle':
         this.noise({ gain: 0.7 * falloff, freq: 1500, decay: 0.12 });
         this.tone({ freq: 150, endFreq: 55, duration: 0.14, gain: 0.25 * falloff, type: 'sawtooth' });
+        break;
+      case 'sniper':
+        // Deeper and much longer, with a tail that reads as an echo off the arena wall.
+        this.noise({ gain: 0.9 * falloff, freq: 1150, decay: 0.24 });
+        this.tone({ freq: 105, endFreq: 38, duration: 0.3, gain: 0.28 * falloff, type: 'sawtooth' });
+        this.noise({ gain: 0.16 * falloff, freq: 600, decay: 0.5, duration: 0.55 });
         break;
       default:
         this.noise({ gain: 0.5 * falloff, freq: 1900, decay: 0.075 });
@@ -156,6 +164,18 @@ export class Sfx {
     const falloff = own ? 1 : Math.max(0.12, 1 - distance / 42);
     this.noise({ gain: 0.18 * falloff, freq: 2900, type: 'highpass', decay: 0.08, duration: 0.09 });
     if (own) this.tone({ freq: 380, endFreq: 620, duration: 0.07, gain: 0.05, type: 'triangle' });
+  }
+
+  /** Raising or lowering the optic: a small mechanical click, not a UI beep. */
+  scope(open = true) {
+    this.tone({
+      freq: open ? 520 : 430,
+      endFreq: open ? 780 : 320,
+      duration: 0.05,
+      gain: 0.05,
+      type: 'triangle',
+    });
+    this.noise({ gain: 0.05, freq: 4200, type: 'highpass', decay: 0.03, duration: 0.04 });
   }
 
   /** Stamina ran out: a short, dry breath rather than a UI beep. */

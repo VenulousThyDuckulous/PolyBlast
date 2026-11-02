@@ -35,6 +35,15 @@
         </span>
       </div>
 
+      <!-- Scope overlay: a lens mask plus a reticle, shown only while the server says you are scoped. -->
+      <div id="scope" class="hidden">
+        <div class="scope-mask"></div>
+        <div class="scope-reticle">
+          <span class="sr-v"></span><span class="sr-h"></span><span class="sr-dot"></span>
+          <span class="sr-post sr-post-l"></span><span class="sr-post sr-post-r"></span>
+        </div>
+      </div>
+
       <div id="vitals">
         <div class="bar armor"><div id="armor-fill"></div></div>
         <div class="bar health"><div id="hp-fill"></div></div>
@@ -139,6 +148,7 @@
           <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
           <div><kbd>Shift</kbd> sprint</div>
           <div><kbd>Ctrl</kbd>/<kbd>C</kbd> slide</div>
+          <div><kbd>RMB</kbd>/<kbd>Q</kbd> scope</div>
           <div><kbd>3</kbd> knife</div>
           <div><kbd>Space</kbd> jump</div>
         </div>
@@ -150,8 +160,10 @@
           <div><kbd>LT</kbd> sprint</div>
           <div><kbd>Y</kbd> pick up</div>
           <div><kbd>X</kbd> reload</div>
-          <div><kbd>LB</kbd><kbd>RB</kbd> weapons</div>
-          <div><kbd>L3</kbd> slide</div>
+          <div><kbd>LB</kbd> scope</div>
+          <div><kbd>RB</kbd> next weapon</div>
+          <div><kbd>D-pad ←→</kbd> guns</div>
+          <div><kbd>B</kbd>/<kbd>L3</kbd> slide</div>
           <div><kbd>D-pad ↑</kbd> knife</div>
           <div><kbd>A</kbd> jump</div>
         </div>
@@ -163,6 +175,7 @@
           <div><kbd>PICK</kbd> loot</div>
           <div><kbd>RELOAD</kbd> reload</div>
           <div><kbd>SLIDE</kbd> slide</div>
+          <div><kbd>SCOPE</kbd> scope</div>
           <div><kbd>KNIFE</kbd> knife</div>
           <div><kbd>JUMP</kbd> jump</div>
           <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
@@ -226,6 +239,7 @@
         <button class="tbtn" data-act="slot1" aria-label="Weapon slot 1">1</button>
         <button class="tbtn" data-act="slot2" aria-label="Weapon slot 2">2</button>
         <button class="tbtn" data-act="slot3" aria-label="Knife">KNIFE</button>
+        <button class="tbtn" data-act="scope" aria-label="Scope">SCOPE</button>
         <button class="tbtn" data-act="pause" aria-label="Pause">II</button>
       </div>
     </div>

@@ -24,7 +24,7 @@ import {
   weaponBox,
 } from '../server/sim.js';
 import { updateBots } from '../server/bots.js';
-import { TICK_DT, PLAYER } from '../server/config.js';
+import { TICK_DT, PLAYER, WEAPONS } from '../server/config.js';
 import { PHASE } from '../shared/protocol.js';
 import { generateWorld, isCircleClear, raycastWorld, resolveCircle } from '../server/world.js';
 
@@ -533,6 +533,121 @@ test('empty magazine triggers a reload that refills from reserve', () => {
   // Only 10 rounds were in reserve, so the 12-round magazine refills to 10 and empties the reserve.
   assert.equal(p.slots[0].mag, 10, 'magazine refilled from reserve');
   assert.equal(p.reserve.pistol, 0, 'reserve consumed');
+});
+
+console.log('\nsniper and scoping');
+
+/** A duel with a sniper in the shooter's hands, aimed level at the victim's chest. */
+function sniperDuel({ gap = 60 } = {}) {
+  const match = makeLiveMatch(2);
+  match.world.boxes = match.world.boxes.filter((b) => b.kind === 'boundary');
+  // Freeze the ring: none of these checks should be polluted by zone damage mid-volley.
+  match.zone.timer = 9999;
+  const shooter = match.players.get('p0');
+  const victim = match.players.get('p1');
+  shooter.pos = { x: 0, y: 0, z: 0 };
+  victim.pos = { x: 0, y: 0, z: -gap };
+  shooter.yaw = 0;
+  shooter.pitch = 0;
+  shooter.vel = { x: 0, y: 0, z: 0 };
+  victim.vel = { x: 0, y: 0, z: 0 };
+  shooter.slots[0] = { kind: 'sniper', mag: WEAPONS.sniper.mag };
+  shooter.slot = 0;
+  shooter.reserve.sniper = 200;
+  shooter.fireCd = 0;
+  shooter.reload = null;
+  shooter.spawnShield = 0;
+  // Plenty of health so a long volley measures spread rather than ending the match.
+  victim.hp = 5000;
+  return { match, shooter, victim, gap };
+}
+
+/** Fire `shots` separate rounds, counting how many connected. */
+function sniperVolley(match, shooter, victim, { scope, shots, gap }) {
+  const pitch = Math.atan2(1.0 - PLAYER.eye, gap);
+  let hits = 0;
+  let before = victim.hp;
+  for (let shot = 0; shot < shots; shot++) {
+    // Isolate spread from reload timing by handing each round a full magazine.
+    shooter.slots[0].mag = WEAPONS.sniper.mag;
+    shooter.reload = null;
+    const start = match.time;
+    while (match.time - start < 1.6) {
+      setInput(match, shooter.id, { yaw: 0, pitch, mx: 0, mz: 0, fire: true, scope });
+      advance(match, 0.05);
+      if (victim.hp < before) {
+        hits++;
+        before = victim.hp;
+        break;
+      }
+    }
+    setInput(match, shooter.id, { yaw: 0, pitch, fire: false, scope });
+    advance(match, 0.05);
+  }
+  return hits;
+}
+
+test('the sniper is only accurate through its scope', () => {
+  assert.equal(WEAPONS.sniper.scope, true, 'the sniper has an optic');
+  assert.ok(
+    WEAPONS.sniper.scopeSpread < WEAPONS.sniper.spread,
+    `scoped cone (${WEAPONS.sniper.scopeSpread}) must be tighter than hip fire (${WEAPONS.sniper.spread})`,
+  );
+
+  const hip = sniperDuel({ gap: 45 });
+  const hipHits = sniperVolley(hip.match, hip.shooter, hip.victim, { scope: false, shots: 10, gap: 45 });
+  assert.ok(hipHits < 10, `hip fire should miss at 45m, got ${hipHits}/10`);
+
+  const scoped = sniperDuel({ gap: 45 });
+  const scopedHits = sniperVolley(scoped.match, scoped.shooter, scoped.victim, {
+    scope: true,
+    shots: 4,
+    gap: 45,
+  });
+  assert.equal(scopedHits, 4, `scoped fire should land every round, got ${scopedHits}/4`);
+});
+
+test('scoping slows you to a walk and rules out sprinting', () => {
+  const { match, shooter } = sniperDuel({ gap: 20 });
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, scope: true });
+  advance(match, 1.2);
+  const speed = Math.hypot(shooter.vel.x, shooter.vel.z);
+  assert.equal(shooter.scoped, true, 'the optic is up');
+  assert.equal(shooter.sprinting, false, 'a scoped rifle cannot be sprinted with');
+  assert.ok(
+    speed < PLAYER.speed * 0.6,
+    `scoped speed ${speed.toFixed(2)} should be well under a walk (${PLAYER.speed})`,
+  );
+});
+
+test('only a weapon with an optic can scope', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  givePistol(p);
+  setInput(match, 'p0', { yaw: 0, pitch: 0, scope: true });
+  advance(match, 0.1);
+  assert.equal(p.scoped, false, 'a pistol has no optic');
+  assert.equal(buildSelf(match, 'p0').scoped, false);
+});
+
+test('a scoped sniper headshot is a one-shot kill', () => {
+  const { match, victim } = sniperDuel({ gap: 8 });
+  victim.hp = PLAYER.maxHp;
+  setInput(match, 'p0', { yaw: 0, pitch: 0, fire: true, scope: true });
+  advance(match, 0.15);
+  assert.equal(victim.alive, false, 'a level shot at 8m hits the head and kills');
+  const kill = buildSnapshot(match).events.find((e) => e.type === 'kill');
+  assert.ok(kill, 'kill event for the feed');
+  assert.equal(kill.head, 1, 'credited as a headshot');
+});
+
+test('the snapshot and self packet report the scope state', () => {
+  const { match } = sniperDuel({ gap: 20 });
+  setInput(match, 'p0', { yaw: 0, pitch: 0, scope: true });
+  advance(match, 0.1);
+  const me = buildSnapshot(match).players.find((p) => p.id === 'p0');
+  assert.equal(me.sc, 1, 'other clients see a scoped player');
+  assert.equal(buildSelf(match, 'p0').scoped, true);
 });
 
 console.log('\nzone and match flow');

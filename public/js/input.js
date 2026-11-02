@@ -32,6 +32,8 @@ const SLIDE_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
 const SENSITIVITY = 0.0021;
 /** Radians per second at full stick deflection. */
 const PAD_LOOK_SPEED = 3.1;
+/** Hold-to-aim; the mouse's right button is primary, Q covers trackpads without one. */
+const SCOPE_KEYS = ['KeyQ'];
 const MAX_PITCH = Math.PI / 2 - 0.06;
 
 export class Input {
@@ -39,10 +41,13 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.mouseFire = false;
+    this.mouseScope = false;
+    /** Look multiplier applied by the client while zoomed: a scoped view magnifies every count. */
+    this.lookScale = 1;
     this.locked = false;
     this.yaw = 0;
     this.pitch = 0;
-    this.actions = { reload: false, interact: false, slot: 0 };
+    this.actions = { reload: false, interact: false, slot: 0, cycle: false };
     this.onLockChange = null;
     this.onAction = null;
     this.onDeviceChange = null;
@@ -60,9 +65,12 @@ export class Input {
       if (!this.enabled) return;
       if (this.devices.platform !== 'mobile') this.devices.setActive(DEVICE.KEYBOARD);
       if (e.button === 0) this.mouseFire = true;
+      // Right mouse aims down sights; the context menu is suppressed just below.
+      if (e.button === 2) this.mouseScope = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseFire = false;
+      if (e.button === 2) this.mouseScope = false;
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -72,14 +80,18 @@ export class Input {
       'pointerdown',
       (e) => {
         if (!this.enabled) return;
-        if (e.pointerType === 'touch' || e.pointerType === 'pen') this.devices.setActive(DEVICE.TOUCH);
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          this.devices.setActive(DEVICE.TOUCH);
+          // A pad must not snatch control back from a finger that is still on the glass.
+          this.devices.noteTouch();
+        }
       },
       { capture: true },
     );
 
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this.devices.usingTouch) return;
-      this.look(e.movementX * -SENSITIVITY, e.movementY * -SENSITIVITY);
+      this.look(e.movementX * -SENSITIVITY * this.lookScale, e.movementY * -SENSITIVITY * this.lookScale);
     });
 
     document.addEventListener('pointerlockchange', () => {
@@ -153,6 +165,7 @@ export class Input {
   clear() {
     this.keys.clear();
     this.mouseFire = false;
+    this.mouseScope = false;
     this.pad = null;
     this.touch.clear();
   }
@@ -176,7 +189,7 @@ export class Input {
   update(dt) {
     this.syncTouchLayer();
 
-    const pad = this.devices.pollPad();
+    const pad = this.devices.pollPad(dt);
     this.pad = pad;
 
     // Edge-triggered pad/touch actions are latched exactly like key presses.
@@ -187,13 +200,17 @@ export class Input {
       if (a.reload) this.actions.reload = true;
       if (a.interact) this.actions.interact = true;
       if (a.slot) this.actions.slot = a.slot;
+      if (a.cycle) this.actions.cycle = true;
     }
 
     if (this.devices.usingGamepad && pad) {
-      this.look(-pad.look.x * PAD_LOOK_SPEED * dt, -pad.look.y * PAD_LOOK_SPEED * dt);
+      this.look(
+        -pad.look.x * PAD_LOOK_SPEED * dt * this.lookScale,
+        -pad.look.y * PAD_LOOK_SPEED * dt * this.lookScale,
+      );
     } else if (this.devices.usingTouch) {
       const look = this.touch.drainLook();
-      this.look(look.x, look.y);
+      this.look(look.x * this.lookScale, look.y * this.lookScale);
     } else {
       this.touch.drainLook();
     }
@@ -244,10 +261,17 @@ export class Input {
     return this.mouseFire;
   }
 
+  /** True while the aim-down-sights control is held, from whichever device is live. */
+  get scope() {
+    if (this.devices.usingTouch) return this.touch.scope;
+    if (this.devices.usingGamepad && this.pad) return this.pad.scope;
+    return this.mouseScope || SCOPE_KEYS.some((code) => this.keys.has(code));
+  }
+
   /** Read and clear the latched one-shot actions. */
   consumeActions() {
     const a = this.actions;
-    this.actions = { reload: false, interact: false, slot: 0 };
+    this.actions = { reload: false, interact: false, slot: 0, cycle: false };
     return a;
   }
 }

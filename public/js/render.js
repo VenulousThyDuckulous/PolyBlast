@@ -7,6 +7,7 @@ import * as THREE from 'three';
 
 import { HATS } from '../shared/avatar.js';
 import { createAvatar } from './avatar-mesh.js';
+import { createWeaponModel, disposeWeaponModel } from './weapon-models.js';
 
 const EYE = 1.62;
 const ZONE_HEIGHT = 26;
@@ -18,6 +19,7 @@ const WEAPON_LOOK = {
   smg: { color: 0x7ae582, length: 0.5, thick: 0.12 },
   shotgun: { color: 0xff8b6b, length: 0.62, thick: 0.15 },
   rifle: { color: 0x8ecae6, length: 0.7, thick: 0.11 },
+  sniper: { color: 0xc7a8ff, length: 0.95, thick: 0.1 },
   knife: { color: 0xdfe7f2, length: 0.3, thick: 0.06 },
   unarmed: { color: 0x8fa3bb, length: 0.2, thick: 0.08 },
 };
@@ -26,6 +28,8 @@ const WEAPON_LOOK = {
 const FOV_BASE = 78;
 const FOV_SPRINT = 83;
 const FOV_SLIDE = 89;
+/** First-person weapons are modelled at true-ish size, then shrunk so they do not fill the screen. */
+const VIEW_SCALE = 0.82;
 
 const LOOT_LOOK = {
   weapon: { color: 0xffd166, size: [0.15, 0.15, 0.7] },
@@ -230,25 +234,10 @@ export class Renderer {
     this.viewmodel = new THREE.Group();
     this.gunGroup = new THREE.Group();
 
-    this.gunMaterial = new THREE.MeshStandardMaterial({ color: 0x8fa3bb, roughness: 0.55, metalness: 0.3 });
+    // Every gun is a real model now (weapon-models.js), cached per kind and toggled. The wrapper
+    // holds the hand pose, recoil and sway regardless of which weapon is out.
     this.gunDark = new THREE.MeshStandardMaterial({ color: 0x2a3444, roughness: 0.8, metalness: 0.2 });
-
-    this.gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.105, 0.5), this.gunMaterial);
-    this.gunBody.position.set(0, 0, -0.22);
-    this.gunGroup.add(this.gunBody);
-
-    this.gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.34), this.gunDark);
-    this.gunBarrel.position.set(0, 0.012, -0.6);
-    this.gunGroup.add(this.gunBarrel);
-
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.17, 0.1), this.gunDark);
-    grip.position.set(0, -0.12, 0.03);
-    grip.rotation.x = 0.16;
-    this.gunGroup.add(grip);
-
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.1), this.gunDark);
-    sight.position.set(0, 0.08, -0.18);
-    this.gunGroup.add(sight);
+    this.weaponModels = new Map();
 
     this.gunGroup.position.set(0.23, -0.19, -0.3);
     this.gunGroup.rotation.y = 0.05;
@@ -263,7 +252,7 @@ export class Renderer {
         depthWrite: false,
       }),
     );
-    this.muzzle.position.set(0, 0.02, -0.78);
+    this.muzzle.position.set(0, 0.02, -0.5);
     this.muzzle.scale.setScalar(0.45);
     this.muzzle.visible = false;
     this.gunGroup.add(this.muzzle);
@@ -366,7 +355,7 @@ export class Renderer {
     const group = new THREE.Group();
     const built = createAvatar({ body: p.c, accent: p.ac, hat: HATS[p.h]?.id || 'none' });
     group.add(built.group);
-    const gun = built.gun;
+    const gunMount = built.gunMount;
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.5, 16),
@@ -404,7 +393,7 @@ export class Renderer {
     group.add(sprite);
 
     this.scene.add(group);
-    entry = { group, shield, sprite, gun, key, name: p.n, visible: true };
+    entry = { group, shield, sprite, gunMount, gunModel: null, gunKind: null, key, name: p.n, visible: true };
     this.players.set(p.id, entry);
     return entry;
   }
@@ -508,10 +497,14 @@ export class Renderer {
       }
     }
 
-    // Sprinting and sliding widen the view; a slide also banks the camera slightly.
-    const targetFov = me.sliding ? FOV_SLIDE : me.sprinting ? FOV_SPRINT : FOV_BASE;
+    // Sprinting and sliding widen the view; a slide also banks the camera. Scoping overrides both
+    // with the weapon's own field of view, which is the whole point of the optic.
+    const weapon = me.weapon ? view.config?.weapons?.[me.weapon] : null;
+    const scopeFov = me.scoped && weapon?.scopeFov ? weapon.scopeFov : 0;
+    const targetFov = scopeFov || (me.sliding ? FOV_SLIDE : me.sprinting ? FOV_SPRINT : FOV_BASE);
     if (Math.abs(targetFov - this.fov) > 0.02) {
-      this.fov += (targetFov - this.fov) * Math.min(1, dt * 8);
+      // Zooming snaps a little faster than the movement FOV, so the lens feels mechanical.
+      this.fov += (targetFov - this.fov) * Math.min(1, dt * (scopeFov ? 16 : 8));
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();
     }
@@ -549,10 +542,8 @@ export class Renderer {
       // Straight above someone standing in your face the name tag fills half the screen.
       const near = (p.x - view.me.x) ** 2 + (p.z - view.me.z) ** 2 < 2.4 * 2.4;
       entry.sprite.visible = !near;
-      // Gun length hints at what they're holding.
-      const look = WEAPON_LOOK[p.w || 'unarmed'];
-      entry.gun.scale.z = (look.length / 0.46) * 1.0;
-      entry.gun.material.color.setHex(look.color);
+      // What they are carrying is a real model, so it reads at range.
+      this.setPlayerWeapon(entry, p.w);
     }
     for (const id of [...this.players.keys()]) {
       if (!seen.has(id)) this.disposePlayer(id);
@@ -690,7 +681,9 @@ export class Renderer {
     // Never show a weapon the player does not have: the knife lives in its own slot, so it swaps in.
     const armed = !!view.me.weapon;
     const melee = armed && !!view.me.melee;
-    this.gunGroup.visible = armed && !melee;
+    // Scoped fire is seen through the lens overlay, so the gun itself gets out of the way.
+    const scoped = armed && !melee && !!view.me.scoped;
+    this.gunGroup.visible = armed && !melee && !scoped;
     this.knifeGroup.visible = melee;
     if (!armed) return;
     if (melee) {
@@ -698,22 +691,60 @@ export class Renderer {
       return;
     }
 
-    const look = WEAPON_LOOK[view.me.weapon] || WEAPON_LOOK.unarmed;
-    this.gunMaterial.color.setHex(look.color);
-    this.gunBarrel.scale.z = look.length / 0.34;
-    this.gunBarrel.position.z = -0.45 - look.length * 0.42;
-    this.gunBody.scale.set(look.thick / 0.085 * 0.85, 1, 1);
+    const kind = view.me.weapon;
+    const model = this.modelFor(kind);
+    for (const [id, entry] of this.weaponModels) entry.group.visible = id === kind;
+    this.muzzle.position.set(
+      model.muzzle.x * VIEW_SCALE,
+      model.muzzle.y * VIEW_SCALE,
+      model.muzzle.z * VIEW_SCALE,
+    );
 
     this.recoil = Math.max(0, this.recoil - dt * 9);
+    // A scoped rifle is held still; its kick happens out of sight behind the lens.
+    const sway = scoped ? 0 : 1;
+    this.gunGroup.position.x = 0.23 + Math.sin(this.time * 1.1) * 0.004 * sway;
+    this.gunGroup.position.y =
+      -0.19 + Math.sin(this.time * 1.7) * 0.004 * sway - Math.abs(this.recoil) * 0.01;
     this.gunGroup.position.z = -0.3 + this.recoil * 0.07;
     this.gunGroup.rotation.x = this.recoil * 0.28;
-    // Subtle idle sway so the weapon doesn't look pasted on.
-    this.gunGroup.position.x = 0.23 + Math.sin(this.time * 1.1) * 0.004;
-    this.gunGroup.position.y = -0.19 + Math.sin(this.time * 1.7) * 0.004 - Math.abs(this.recoil) * 0.01;
 
     this.muzzleTimer -= dt;
     if (this.muzzleTimer <= 0) this.muzzle.visible = false;
     else this.muzzle.scale.setScalar(0.35 + Math.random() * 0.25);
+  }
+
+  /** Lazily build and cache the first-person model for one weapon kind. */
+  modelFor(kind) {
+    let model = this.weaponModels.get(kind);
+    if (!model) {
+      model = createWeaponModel(kind);
+      model.group.scale.setScalar(VIEW_SCALE);
+      model.group.visible = false;
+      this.gunGroup.add(model.group);
+      this.weaponModels.set(kind, model);
+    }
+    return model;
+  }
+
+  /**
+   * Swap the model in another player's hands. Built per player (rather than cached) so removing
+   * that player disposes exactly what they owned.
+   */
+  setPlayerWeapon(entry, kind) {
+    const id = kind || null;
+    if (entry.gunKind === id) return;
+    entry.gunKind = id;
+    if (entry.gunModel) {
+      entry.gunMount.remove(entry.gunModel.group);
+      disposeWeaponModel(entry.gunModel.group);
+      entry.gunModel = null;
+    }
+    if (!id) return;
+    const model = createWeaponModel(id);
+    model.group.scale.setScalar(0.5);
+    entry.gunMount.add(model.group);
+    entry.gunModel = model;
   }
 
   updateKnife(dt) {

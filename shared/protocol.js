@@ -61,6 +61,8 @@ export function sanitizeInput(raw) {
     fire: !!raw.fire,
     /** Held, not edge-triggered: the sim decides when a slide may actually start. */
     slide: !!raw.slide,
+    /** Held aim-down-sights. The sim only honours it for weapons that have an optic. */
+    scope: !!raw.scope,
     reload: !!raw.reload,
     interact: !!raw.interact,
     slot: raw.slot === 1 ? 1 : raw.slot === 2 ? 2 : raw.slot === 3 ? 3 : 0,

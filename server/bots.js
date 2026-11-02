@@ -308,7 +308,9 @@ function think(match, p, state, dt) {
       state.strafeDir *= -1;
       state.strafeTimer = 0.5 + Math.random() * 0.9;
     }
-    const ideal = def.melee ? 1.1 : def.id === 'shotgun' ? 7 : def.id === 'rifle' ? 26 : 12;
+    // Keep each weapon inside the range band where it is actually worth holding.
+    const ideal =
+      def.melee ? 1.1 : def.id === 'shotgun' ? 7 : def.id === 'sniper' ? 42 : def.id === 'rifle' ? 26 : 12;
     let dx = 0;
     let dz = 0;
     if (d < ideal - 3) {

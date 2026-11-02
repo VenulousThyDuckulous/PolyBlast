@@ -111,6 +111,76 @@ kbd {
   opacity: 0.7;
 }
 
+/* ---- scope ---------------------------------------------------------------- */
+#scope {
+  position: absolute;
+  inset: 0;
+}
+
+/* The mask is what sells it: everything outside the lens is genuinely hidden, not dimmed. */
+.scope-mask {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0 30vmin, rgba(0, 0, 0, 0.9) 31.4vmin, #000 36vmin),
+    radial-gradient(circle at 50% 50%, rgba(170, 215, 255, 0.07) 0 30vmin, rgba(0, 0, 0, 0) 30.6vmin);
+}
+
+.scope-reticle {
+  position: absolute;
+  inset: 0;
+}
+
+.sr-v,
+.sr-h,
+.sr-post {
+  position: absolute;
+  background: rgba(8, 12, 18, 0.92);
+}
+
+.sr-v {
+  left: calc(50% - 0.5px);
+  top: calc(50% - 30vmin);
+  width: 1px;
+  height: 60vmin;
+}
+
+.sr-h {
+  top: calc(50% - 0.5px);
+  left: calc(50% - 30vmin);
+  width: 60vmin;
+  height: 1px;
+}
+
+/* Thicker posts toward the edges, the way a duplex reticle reads. */
+.sr-post {
+  top: calc(50% - 1.5px);
+  width: 9vmin;
+  height: 3px;
+}
+.sr-post-l {
+  left: calc(50% - 30vmin);
+}
+.sr-post-r {
+  right: calc(50% - 30vmin);
+}
+
+.sr-dot {
+  position: absolute;
+  left: calc(50% - 2.5px);
+  top: calc(50% - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 86, 86, 0.95);
+  box-shadow: 0 0 8px rgba(255, 60, 60, 0.85);
+}
+
+/* The hip-fire crosshair has no business sitting on top of a reticle. */
+body.scoped #crosshair {
+  opacity: 0;
+}
+
 #hitmarker {
   position: absolute;
   left: 0;
@@ -1132,6 +1202,15 @@ button:disabled {
 .tbtn[data-act='slot3'] {
   right: 180px;
   bottom: 216px;
+}
+
+.tbtn[data-act='scope'] {
+  right: 0;
+  bottom: 216px;
+  width: 46px;
+  height: 46px;
+  font-size: 9px;
+  opacity: 0.75;
 }
 
 .tbtn[data-act='pause'] {

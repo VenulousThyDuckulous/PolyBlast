@@ -39,6 +39,7 @@ const EMPTY_INPUT = () => ({
   jump: false,
   fire: false,
   slide: false,
+  scope: false,
 });
 
 /** Two gun slots and a knife that is always in the third. */
@@ -117,7 +118,7 @@ export function addPlayer(match, { id, name, bot = false, avatar = DEFAULT_AVATA
     damageDealt: 0,
     slots: freshSlots(),
     slot: 0,
-    reserve: { pistol: 0, smg: 0, shotgun: 0, rifle: 0, knife: 0 },
+    reserve: { pistol: 0, smg: 0, shotgun: 0, rifle: 0, sniper: 0, knife: 0 },
     fireCd: 0,
     reload: null,
     spawnShield: 0,
@@ -134,6 +135,7 @@ export function addPlayer(match, { id, name, bot = false, avatar = DEFAULT_AVATA
     slide: null,
     slideCd: 0,
     slideLock: false,
+    scoped: false,
     // ---- combat bookkeeping used by the stealth finisher
     lastFireAt: -99,
     lastAttackId: null,
@@ -222,6 +224,7 @@ export function setInput(match, id, raw) {
   p.input.jump = !!raw.jump;
   p.input.fire = !!raw.fire;
   p.input.slide = !!raw.slide;
+  p.input.scope = !!raw.scope;
   // Edge-triggered actions are latched so a press can't fall between ticks.
   if (raw.interact) p.pending.interact = true;
   if (raw.reload) p.pending.reload = true;
@@ -324,6 +327,7 @@ function startLive(match) {
     p.slide = null;
     p.slideCd = 0;
     p.slideLock = false;
+    p.scoped = false;
     p.lastFireAt = -99;
     p.lastAttackId = null;
   }
@@ -360,6 +364,7 @@ function resetMatch(match) {
     p.slide = null;
     p.slideCd = 0;
     p.slideLock = false;
+    p.scoped = false;
     const s = findSpawn(match);
     p.pos = { x: s.x, y: 0, z: s.z };
     p.vel = { x: 0, y: 0, z: 0 };
@@ -518,12 +523,20 @@ function movePlayer(match, p, dt) {
   const speedNow = Math.hypot(p.vel.x, p.vel.z);
   const wantsMove = Math.hypot(inp.mx, inp.mz) > 0.1;
 
+  // ---- aim down sights ---------------------------------------------------
+  // Scoping belongs to the weapon, not the button: the sniper has a lens and a pistol does not. It
+  // also needs both feet on the ground, and it cannot survive into a slide.
+  const held = getHeld(p);
+  const heldDef = held ? WEAPONS[held.kind] : null;
+  p.scoped = !!(heldDef && heldDef.scope && inp.scope && !p.slide && p.onGround);
+
   // ---- slide -------------------------------------------------------------
   if (p.slide && (match.time >= p.slide.endsAt || (inp.jump && p.onGround))) endSlide(p);
   if (
     !p.slide &&
     !p.slideLock &&
     inp.slide &&
+    !p.scoped &&
     p.onGround &&
     p.slideCd <= 0 &&
     !inp.fire &&
@@ -540,7 +553,7 @@ function movePlayer(match, p, dt) {
   else if (p.stamina <= 0) p.sprintLock = true;
   const canSustain =
     !p.sprintLock && (p.sprinting ? p.stamina > 0 : p.stamina > PLAYER.staminaSprintMin);
-  const sprinting = !p.slide && inp.sprint && wantsMove && !inp.fire && canSustain;
+  const sprinting = !p.slide && !p.scoped && inp.sprint && wantsMove && !inp.fire && canSustain;
   p.sprinting = sprinting;
   if (sprinting) {
     p.stamina = Math.max(0, p.stamina - PLAYER.staminaDrain * dt);
@@ -576,8 +589,9 @@ function movePlayer(match, p, dt) {
     p.vel.x = p.slide.dx * target;
     p.vel.z = p.slide.dz * target;
   } else {
-    // Smooth ramp on the way in, smooth braking on the way out.
-    const targetSpeed = sprinting ? PLAYER.sprintSpeed : PLAYER.speed;
+    // Smooth ramp on the way in, smooth braking on the way out. A scoped rifle is walked, not run.
+    const scopeSpeed = p.scoped ? Math.min(PLAYER.speed, heldDef?.scopeSpeed ?? PLAYER.speed) : PLAYER.speed;
+    const targetSpeed = sprinting ? PLAYER.sprintSpeed : p.scoped ? scopeSpeed : PLAYER.speed;
     const accel = p.pos.y <= 0.01
       ? wantsMove
         ? sprinting
@@ -657,7 +671,10 @@ function tryFire(match, p) {
   const ox = p.pos.x;
   const oy = p.pos.y + eyeHeight(p);
   const oz = p.pos.z;
-  const spreadRad = (def.spread * Math.PI) / 180;
+  // Through the lens the cone collapses to the weapon's scoped value; hip fire stays deliberately
+  // wide, which is what makes the sniper a commitment instead of a better rifle.
+  const spreadDeg = p.scoped && def.scopeSpread != null ? def.scopeSpread : def.spread;
+  const spreadRad = (spreadDeg * Math.PI) / 180;
   // Moving/shooting while airborne widens the cone a little.
   const moving = Math.hypot(p.vel.x, p.vel.z) > 1.5 ? 1.35 : 1;
   const air = p.onGround ? 1 : 1.6;
@@ -863,6 +880,7 @@ function killPlayer(match, victim, killer, weaponKind, headshot) {
   victim.spawnShield = 0;
   victim.slide = null;
   victim.slideLock = true;
+  victim.scoped = false;
   victim.sprinting = false;
   victim.input.fire = false;
   victim.input.slide = false;
@@ -918,12 +936,14 @@ function dropInventory(match, p, scatter) {
 
 function spawnLoot(match) {
   const spots = pickLootSpots(match.world, match.rng, MATCH.lootCount);
+  // The sniper is the rarest find: it hits hardest, and it is nearly useless without the scope.
   const rollWeapon = () => {
     const r = Math.random();
-    if (r < 0.42) return 'pistol';
-    if (r < 0.64) return 'smg';
-    if (r < 0.82) return 'shotgun';
-    return 'rifle';
+    if (r < 0.38) return 'pistol';
+    if (r < 0.6) return 'smg';
+    if (r < 0.78) return 'shotgun';
+    if (r < 0.94) return 'rifle';
+    return 'sniper';
   };
 
   for (const s of spots) {
@@ -1083,6 +1103,8 @@ export function buildSnapshot(match) {
       // Sliding players are visibly low, which is also the cue that they are harder to hit.
       sl: p.slide ? 1 : 0,
       sp: p.sprinting ? 1 : 0,
+      // Aiming down sights is visible to everyone: a scoped player is slower and more predictable.
+      sc: p.scoped ? 1 : 0,
       kil: p.killerId,
     });
   }
@@ -1149,6 +1171,8 @@ export function buildSelf(match, id) {
     staminaMax: PLAYER.staminaMax,
     sprinting: p.sprinting,
     sliding: !!p.slide,
+    /** True while the optic is up; the client zooms in and swaps in the lens overlay. */
+    scoped: !!p.scoped,
     slideCd: Math.round(p.slideCd * 100) / 100,
     melee: !!held && !!WEAPONS[held.kind].melee,
   };

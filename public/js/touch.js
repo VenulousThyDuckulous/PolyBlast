@@ -34,6 +34,7 @@ export class TouchControls {
     this.jump = false;
     this.sprint = false;
     this.slide = false;
+    this.scope = false;
     this.actions = { reload: false, interact: false, slot: 0, pause: false };
 
     this.root = document.getElementById('touch');
@@ -118,7 +119,8 @@ export class TouchControls {
     // -------------------------------------------------------------- buttons
     for (const button of this.buttons.querySelectorAll('[data-act]')) {
       const act = button.dataset.act;
-      const isHold = act === 'fire' || act === 'jump' || act === 'sprint' || act === 'slide';
+      const isHold =
+        act === 'fire' || act === 'jump' || act === 'sprint' || act === 'slide' || act === 'scope';
 
       button.addEventListener('pointerdown', (e) => {
         if (!this.enabled) return;
@@ -130,6 +132,7 @@ export class TouchControls {
         else if (act === 'jump') this.jump = true;
         else if (act === 'sprint') this.sprint = true;
         else if (act === 'slide') this.slide = true;
+        else if (act === 'scope') this.scope = true;
         else if (act === 'reload') this.actions.reload = true;
         else if (act === 'interact') this.actions.interact = true;
         else if (act === 'pause') this.actions.pause = true;
@@ -144,6 +147,7 @@ export class TouchControls {
           else if (act === 'jump') this.jump = false;
           else if (act === 'sprint') this.sprint = false;
           else if (act === 'slide') this.slide = false;
+          else if (act === 'scope') this.scope = false;
         }
         button.classList.remove('held');
         e?.preventDefault?.();
@@ -199,6 +203,7 @@ export class TouchControls {
     this.jump = false;
     this.sprint = false;
     this.slide = false;
+    this.scope = false;
     this.stickPointer = null;
     this.lookPointer = null;
     this.moveKnob(0, 0);

@@ -95,6 +95,7 @@ controller button hands it back to the controller — so the two never fight ove
 | `W` `A` `S` `D` | Move |
 | Mouse | Look |
 | Left click | Fire |
+| Right click or `Q` | Scope in (sniper) |
 | `Shift` | Sprint (drains stamina) |
 | `Ctrl` or `C` | Slide (needs sprint speed) |
 | `Space` | Jump |
@@ -112,11 +113,13 @@ controller button hands it back to the controller — so the two never fight ove
 | Right stick | Look |
 | `RT` | Fire |
 | `LT` | Sprint |
-| `L3` (hold) | Slide |
+| `B` or `L3` (hold) | Slide |
 | `A` | Jump |
 | `X` | Reload |
 | `Y` | Pick up / swap weapon |
-| `LB` `RB` | Gun slots |
+| `LB` | Scope in (sniper) |
+| `RB` | Next weapon |
+| `D-pad left/right` | Gun slots |
 | `D-pad up` | Knife |
 | `Start` | Pause |
 
@@ -128,6 +131,7 @@ controller button hands it back to the controller — so the two never fight ove
 | Drag anywhere else | Look |
 | `FIRE` / `JUMP` / `RELOAD` / `PICK` | Actions |
 | `SLIDE` (hold) | Slide |
+| `SCOPE` (hold) | Scope in |
 | `1` `2` | Gun slots |
 | `KNIFE` | Knife |
 | `II` | Pause |
@@ -159,6 +163,13 @@ you commit. A successful takedown refunds 25 stamina, which usually pays for the
 
 Bots sprint, slide occasionally, and switch to the knife when they run dry in someone's face, so all
 of this happens in a solo match too.
+
+**The sniper** is the rarest find and the only weapon with an optic. Through the lens its cone
+collapses from 5.2° of hip-fire spray to 0.05°, it reaches 220 m, and a headshot ends the fight
+outright. The trade is movement: scoping caps you at 2.6 m/s and rules out sprinting and sliding,
+and the bolt cycle is slow enough that a miss is a real problem. Firing from the hip at range is
+mostly a way to give your position away. Bots that pick one up hold the range band it belongs in
+rather than walking into SMG distance with it.
 
 ## How a match plays
 
