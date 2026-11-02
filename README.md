@@ -137,7 +137,9 @@ controller button hands it back to the controller — so the two never fight ove
 | `II` | Pause |
 
 The stick and the look drag track separate fingers, so you can run and aim at once. The HUD moves
-itself out of the thumb zones and respects notched-screen safe areas.
+itself out of the thumb zones and respects notched-screen safe areas. Camera sensitivity sits in the
+lobby next to it and scales every device at once, so mouse, stick and touch all speed up together;
+it is remembered between sessions like the avatar is.
 
 ## Movement and melee
 

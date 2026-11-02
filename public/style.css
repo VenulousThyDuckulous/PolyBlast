@@ -1007,6 +1007,10 @@ button:disabled {
   .avatar-row {
     gap: 8px;
   }
+  .sensitivity-row {
+    margin-top: 6px;
+    padding: 5px 10px;
+  }
   .swatch {
     width: 18px;
     height: 18px;
@@ -1025,6 +1029,86 @@ button:disabled {
   .error {
     min-height: 0;
   }
+}
+
+/* ------------------------------------------------------------- sensitivity */
+
+.sensitivity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 520px;
+  margin: 10px auto 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
+}
+
+.sensitivity-row label {
+  flex: 0 0 34px;
+  width: 34px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sensitivity-row output {
+  flex: 0 0 52px;
+  width: 52px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Range input, restyled to the lobby's flat panels on both rendering engines. */
+.sensitivity-row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.sensitivity-row input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.75), rgba(120, 150, 190, 0.35));
+}
+
+.sensitivity-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.5);
+}
+
+.sensitivity-row input[type='range']::-moz-range-track {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.75), rgba(120, 150, 190, 0.35));
+}
+
+.sensitivity-row input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sensitivity-row input[type='range']:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
 }
 
 /* ------------------------------------------------------- device indicator */

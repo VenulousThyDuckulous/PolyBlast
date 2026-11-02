@@ -134,6 +134,20 @@
           </div>
         </div>
 
+        <div class="sensitivity-row">
+          <label for="sensitivity-input">Camera</label>
+          <input
+            id="sensitivity-input"
+            type="range"
+            min="0.3"
+            max="3"
+            step="0.05"
+            value="1"
+            aria-label="Camera sensitivity"
+          />
+          <output id="sensitivity-value" for="sensitivity-input">1.00×</output>
+        </div>
+
         <p id="device-line" class="device-line">
           <span class="dot"></span><span id="device-name">Keyboard + mouse</span>
           <span id="device-hint" class="device-hint"></span>

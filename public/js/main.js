@@ -33,6 +33,8 @@ const connectError = document.getElementById('connect-error');
 const connectErrorText = document.getElementById('connect-error-text');
 const reloadBtn = document.getElementById('reload-btn');
 const deviceName = document.getElementById('device-name');
+const sensitivityInput = document.getElementById('sensitivity-input');
+const sensitivityValue = document.getElementById('sensitivity-value');
 const deviceHint = document.getElementById('device-hint');
 const promptKey = document.getElementById('prompt-key');
 const legends = {
@@ -128,6 +130,20 @@ net.onClose = () => {
 };
 
 reloadBtn.addEventListener('click', () => location.reload());
+
+// ------------------------------------------------------------------ sensitivity
+
+/** Show the stored look multiplier and keep the slider and the game in step. */
+function applySensitivity(value, { persist = false } = {}) {
+  const applied = input.setSensitivity(value, { persist });
+  if (sensitivityInput) sensitivityInput.value = String(applied);
+  if (sensitivityValue) sensitivityValue.textContent = `${applied.toFixed(2)}×`;
+}
+
+applySensitivity(input.sensitivity);
+sensitivityInput?.addEventListener('input', () =>
+  applySensitivity(Number(sensitivityInput.value), { persist: true }),
+);
 
 // ------------------------------------------------------------------ pointer lock / pause
 

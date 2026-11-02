@@ -32,6 +32,31 @@ const SLIDE_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
 const SENSITIVITY = 0.0021;
 /** Radians per second at full stick deflection. */
 const PAD_LOOK_SPEED = 3.1;
+
+/**
+ * Player-facing look multiplier, set in the lobby.
+ *
+ * It scales mouse, stick and touch together, so a player who likes a fast camera gets it on every
+ * device instead of having to relearn one of them. 1 is the tuned default.
+ */
+export const SENSITIVITY_LIMITS = { min: 0.3, max: 3, step: 0.05, default: 1 };
+const SENSITIVITY_KEY = 'polyblast-sensitivity';
+
+function clampSensitivity(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return SENSITIVITY_LIMITS.default;
+  return Math.min(SENSITIVITY_LIMITS.max, Math.max(SENSITIVITY_LIMITS.min, n));
+}
+
+function loadSensitivity() {
+  try {
+    const raw = localStorage.getItem(SENSITIVITY_KEY);
+    return raw === null ? SENSITIVITY_LIMITS.default : clampSensitivity(raw);
+  } catch {
+    // Private mode, or storage denied: play at the default rather than failing to boot.
+    return SENSITIVITY_LIMITS.default;
+  }
+}
 const MAX_PITCH = Math.PI / 2 - 0.06;
 
 export class Input {
@@ -42,6 +67,8 @@ export class Input {
     this.mouseScope = false;
     /** Look multiplier applied by the client while zoomed: a scoped view magnifies every count. */
     this.lookScale = 1;
+    /** Player preference from the lobby, applied on top of lookScale. */
+    this.sensitivity = loadSensitivity();
     this.locked = false;
     this.yaw = 0;
     this.pitch = 0;
@@ -89,7 +116,10 @@ export class Input {
 
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this.devices.usingTouch) return;
-      this.look(e.movementX * -SENSITIVITY * this.lookScale, e.movementY * -SENSITIVITY * this.lookScale);
+      this.look(
+        e.movementX * -SENSITIVITY * this.sensitivity * this.lookScale,
+        e.movementY * -SENSITIVITY * this.sensitivity * this.lookScale,
+      );
     });
 
     document.addEventListener('pointerlockchange', () => {
@@ -97,6 +127,22 @@ export class Input {
       if (!this.locked) this.mouseFire = false;
       this.onLockChange?.(this.locked);
     });
+  }
+
+  /**
+   * Set the look multiplier (1 = default) and remember it. Returns the clamped value, so the lobby
+   * slider always shows what the game is actually using.
+   */
+  setSensitivity(value, { persist = true } = {}) {
+    this.sensitivity = clampSensitivity(value);
+    if (persist) {
+      try {
+        localStorage.setItem(SENSITIVITY_KEY, String(this.sensitivity));
+      } catch {
+        /* private mode: the setting just will not stick */
+      }
+    }
+    return this.sensitivity;
   }
 
   /** Apply a yaw/pitch delta and keep both in range. */
@@ -203,12 +249,12 @@ export class Input {
 
     if (this.devices.usingGamepad && pad) {
       this.look(
-        -pad.look.x * PAD_LOOK_SPEED * dt * this.lookScale,
-        -pad.look.y * PAD_LOOK_SPEED * dt * this.lookScale,
+        -pad.look.x * PAD_LOOK_SPEED * dt * this.sensitivity * this.lookScale,
+        -pad.look.y * PAD_LOOK_SPEED * dt * this.sensitivity * this.lookScale,
       );
     } else if (this.devices.usingTouch) {
       const look = this.touch.drainLook();
-      this.look(look.x * this.lookScale, look.y * this.lookScale);
+      this.look(look.x * this.sensitivity * this.lookScale, look.y * this.sensitivity * this.lookScale);
     } else {
       this.touch.drainLook();
     }
