@@ -1,0 +1,1378 @@
+:root {
+  --bg: #0b0f17;
+  --panel: rgba(12, 18, 28, 0.82);
+  --line: rgba(140, 170, 210, 0.22);
+  --text: #dfe9f5;
+  --muted: #8fa3bb;
+  --accent: #ffd166;
+  --hp: #63e6a0;
+  --armor: #7cc7f5;
+  --danger: #ff5d6c;
+  --zone: #58c7ff;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+  font-size: 0.78em;
+  color: var(--text);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ HUD */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.ch-line,
+.ch-dot {
+  position: absolute;
+  background: rgba(240, 248, 255, 0.85);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+}
+
+.ch-line {
+  width: 2px;
+  height: 7px;
+}
+.ch-up {
+  left: -1px;
+  top: -13px;
+}
+.ch-down {
+  left: -1px;
+  top: 6px;
+}
+.ch-left {
+  width: 7px;
+  height: 2px;
+  left: -13px;
+  top: -1px;
+}
+.ch-right {
+  width: 7px;
+  height: 2px;
+  left: 6px;
+  top: -1px;
+}
+.ch-dot {
+  width: 2px;
+  height: 2px;
+  left: -1px;
+  top: -1px;
+  opacity: 0.7;
+}
+
+/* ---- scope ---------------------------------------------------------------- */
+#scope {
+  position: absolute;
+  inset: 0;
+}
+
+/* The mask is what sells it: everything outside the lens is genuinely hidden, not dimmed. */
+.scope-mask {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 0 30vmin, rgba(0, 0, 0, 0.9) 31.4vmin, #000 36vmin),
+    radial-gradient(circle at 50% 50%, rgba(170, 215, 255, 0.07) 0 30vmin, rgba(0, 0, 0, 0) 30.6vmin);
+}
+
+.scope-reticle {
+  position: absolute;
+  inset: 0;
+}
+
+.sr-v,
+.sr-h,
+.sr-post {
+  position: absolute;
+  background: rgba(8, 12, 18, 0.92);
+}
+
+.sr-v {
+  left: calc(50% - 0.5px);
+  top: calc(50% - 30vmin);
+  width: 1px;
+  height: 60vmin;
+}
+
+.sr-h {
+  top: calc(50% - 0.5px);
+  left: calc(50% - 30vmin);
+  width: 60vmin;
+  height: 1px;
+}
+
+/* Thicker posts toward the edges, the way a duplex reticle reads. */
+.sr-post {
+  top: calc(50% - 1.5px);
+  width: 9vmin;
+  height: 3px;
+}
+.sr-post-l {
+  left: calc(50% - 30vmin);
+}
+.sr-post-r {
+  right: calc(50% - 30vmin);
+}
+
+.sr-dot {
+  position: absolute;
+  left: calc(50% - 2.5px);
+  top: calc(50% - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 86, 86, 0.95);
+  box-shadow: 0 0 8px rgba(255, 60, 60, 0.85);
+}
+
+/* The hip-fire crosshair has no business sitting on top of a reticle. */
+body.scoped #crosshair {
+  opacity: 0;
+}
+
+#hitmarker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+}
+
+#hitmarker span {
+  position: absolute;
+  width: 9px;
+  height: 2px;
+  background: #fff;
+  transform-origin: center;
+}
+#hitmarker span:nth-child(1) {
+  transform: rotate(45deg) translate(4px, -8px);
+}
+#hitmarker span:nth-child(2) {
+  transform: rotate(-45deg) translate(-4px, -8px);
+}
+#hitmarker span:nth-child(3) {
+  transform: rotate(45deg) translate(-6px, 8px);
+}
+#hitmarker span:nth-child(4) {
+  transform: rotate(-45deg) translate(6px, 8px);
+}
+
+#hitmarker.show {
+  animation: hitpop 220ms ease-out;
+}
+#hitmarker.kill span {
+  background: var(--danger);
+}
+
+@keyframes hitpop {
+  0% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+#vitals {
+  position: absolute;
+  left: 26px;
+  bottom: 24px;
+  width: 280px;
+}
+
+.bar {
+  position: relative;
+  height: 9px;
+  margin-bottom: 5px;
+  background: rgba(8, 12, 20, 0.72);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.bar > div {
+  height: 100%;
+  width: 100%;
+  transition: width 120ms linear;
+}
+
+.bar.health > div {
+  background: linear-gradient(90deg, #3fbf82, var(--hp));
+}
+
+.bar.armor {
+  height: 6px;
+}
+
+.bar.armor > div {
+  background: linear-gradient(90deg, #3d8fbe, var(--armor));
+}
+
+.bar.stamina {
+  height: 5px;
+  margin-bottom: 6px;
+}
+
+.bar.stamina > div {
+  background: linear-gradient(90deg, #3f78a8, #7fd6ff);
+  transition: width 90ms linear, background 220ms linear;
+}
+
+/* Out of sprint headroom: still usable, but you cannot start another sprint on it. */
+.bar.stamina > div.spent {
+  background: linear-gradient(90deg, #8a5a18, var(--warn, #ffb457));
+}
+
+.bar.stamina > div.draining {
+  filter: brightness(1.25);
+}
+
+.vitals-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+#hp-text {
+  font-size: 22px;
+  color: var(--text);
+  letter-spacing: 0;
+}
+
+.vitals-label {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+#kills-text {
+  margin-left: auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+#weapon-panel {
+  position: absolute;
+  right: 26px;
+  bottom: 24px;
+  min-width: 190px;
+  text-align: right;
+}
+
+#slots {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: border-color 120ms, color 120ms;
+}
+
+.slot.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.slot.empty {
+  opacity: 0.35;
+}
+
+.slot-key {
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+/* The melee slot is always there, so it is drawn as a fixture rather than loot. */
+.slot.melee {
+  border-style: dashed;
+}
+
+.slot.melee.active {
+  border-style: solid;
+}
+
+#ammo {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+#ammo-sep,
+#ammo-reserve {
+  font-size: 16px;
+  color: var(--muted);
+}
+
+#weapon-name {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+#reload-bar {
+  height: 3px;
+  margin-top: 8px;
+  background: rgba(8, 12, 20, 0.72);
+  opacity: 0;
+}
+
+#reload-bar.active {
+  opacity: 1;
+}
+
+#reload-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+}
+
+#match-panel {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  min-width: 168px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.panel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#alive-count {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.zone-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#zone-state.closing {
+  color: var(--zone);
+}
+
+#zone-hint {
+  margin-top: 6px;
+  padding: 4px 6px;
+  background: rgba(88, 199, 255, 0.16);
+  border-left: 2px solid var(--zone);
+  color: var(--zone);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+#minimap {
+  position: absolute;
+  top: 22px;
+  left: 26px;
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--line);
+  background: rgba(8, 12, 20, 0.66);
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 62px);
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+#toast div {
+  animation: toastIn 200ms ease-out;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+#killfeed {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+#killfeed .feed-row {
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  animation: feedIn 180ms ease-out;
+  white-space: nowrap;
+}
+
+#killfeed .feed-row .k {
+  font-weight: 700;
+}
+
+#killfeed .feed-row .w {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  margin: 0 6px;
+}
+
+#killfeed .feed-row.mine {
+  border-color: rgba(255, 209, 102, 0.6);
+}
+
+@keyframes feedIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+#banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+}
+
+#vignette {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(255, 40, 60, 0.55) 100%);
+  transition: opacity 260ms ease-out;
+}
+
+#vignette.hurt {
+  opacity: 1;
+  transition: opacity 60ms;
+}
+
+/* ------------------------------------------------- stealth finisher + flash */
+
+#finisher-prompt {
+  position: absolute;
+  left: 50%;
+  /* Above the crosshair: the loot prompt sits below it and the two can be up at once. */
+  top: calc(50% - 76px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--danger);
+  background: rgba(12, 6, 10, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: finisherPulse 1.1s ease-in-out infinite;
+}
+
+.finisher-tag {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+@keyframes finisherPulse {
+  0%,
+  100% {
+    border-color: rgba(255, 93, 108, 0.45);
+  }
+  50% {
+    border-color: var(--danger);
+  }
+}
+
+/* Arcade pulse when a takedown lands: a flash, not gore. */
+#flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.18) 0%, transparent 58%);
+}
+
+#flash.show {
+  animation: flashPulse 420ms ease-out;
+}
+
+@keyframes flashPulse {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- screens */
+
+.screen,
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+#lobby {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(70, 110, 160, 0.22), transparent 62%),
+    linear-gradient(160deg, #0a0e16 0%, #0d1420 55%, #0b1119 100%);
+  z-index: 20;
+}
+
+#paused {
+  background: rgba(6, 9, 15, 0.78);
+  z-index: 26;
+  backdrop-filter: blur(3px);
+}
+
+.lobby-inner {
+  max-width: 620px;
+  text-align: center;
+}
+
+.lobby-inner.compact {
+  max-width: 380px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#lobby h1 {
+  margin: 0 0 14px;
+  font-size: clamp(44px, 9vw, 86px);
+  line-height: 0.94;
+  letter-spacing: 0.02em;
+  font-weight: 800;
+}
+
+#lobby h1 span {
+  display: block;
+  color: var(--accent);
+}
+
+.tagline {
+  max-width: 460px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#join-form {
+  margin: 28px 0 6px;
+  text-align: left;
+}
+
+#join-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+}
+
+input {
+  flex: 1;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--accent);
+}
+
+button {
+  padding: 13px 22px;
+  background: var(--accent);
+  border: 0;
+  border-radius: 2px;
+  color: #16130a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter 120ms;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.error {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  text-align: left;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px 14px;
+  margin: 30px 0 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.controls kbd {
+  margin-right: 3px;
+}
+
+.tiny {
+  margin: 10px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(143, 163, 187, 0.7);
+}
+
+#dead,
+#results {
+  z-index: 24;
+  background: rgba(6, 9, 15, 0.62);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.dead-inner,
+.results-inner {
+  text-align: center;
+}
+
+#dead h2,
+#results h2 {
+  margin: 0 0 8px;
+  font-size: clamp(30px, 6vw, 56px);
+  letter-spacing: 0.02em;
+}
+
+#results h2 {
+  color: var(--accent);
+}
+
+.results-inner {
+  padding: 30px 46px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+#countdown {
+  z-index: 23;
+  pointer-events: none;
+  background: rgba(6, 9, 15, 0.35);
+}
+
+#countdown span {
+  font-size: clamp(80px, 18vw, 190px);
+  font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 60px rgba(255, 209, 102, 0.45);
+  animation: countPulse 900ms ease-out infinite;
+}
+
+@keyframes countPulse {
+  0% {
+    transform: scale(1.14);
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+#connect-error {
+  z-index: 30;
+  background: rgba(6, 9, 15, 0.92);
+}
+
+/* ------------------------------------------------------ character editor */
+
+/* The editor makes the lobby taller than a landscape phone, so it scrolls. */
+#lobby {
+  overflow-y: auto;
+}
+
+.avatar-editor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 520px;
+  margin: 18px auto 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
+}
+
+.avatar-preview {
+  flex: 0 0 150px;
+  width: 150px;
+  height: 150px;
+  border: 1px solid var(--line);
+  background: radial-gradient(circle at 50% 32%, rgba(90, 130, 180, 0.2), rgba(8, 12, 20, 0.55));
+}
+
+#avatar-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-options {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-label {
+  flex: 0 0 34px;
+  width: 34px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform 100ms, box-shadow 100ms;
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch.selected {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+}
+
+.hats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hat-btn,
+.ghost-btn {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 100ms, border-color 100ms;
+}
+
+.hat-btn:hover,
+.ghost-btn:hover {
+  color: var(--text);
+  border-color: rgba(140, 170, 210, 0.5);
+}
+
+.hat-btn.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 560px) {
+  .avatar-editor {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .avatar-preview {
+    align-self: center;
+  }
+}
+
+/* Phone in landscape: the lobby is tall, so squeeze it until DROP IN is on screen. */
+@media (max-height: 500px) {
+  #lobby h1 {
+    font-size: clamp(28px, 11vh, 46px);
+    margin-bottom: 6px;
+  }
+  .eyebrow {
+    margin-bottom: 2px;
+    font-size: 9px;
+  }
+  .tagline {
+    display: none;
+  }
+  #join-form {
+    margin: 10px 0 2px;
+  }
+  #join-form label {
+    display: none;
+  }
+  .avatar-editor {
+    margin-top: 8px;
+    padding: 8px;
+    gap: 10px;
+  }
+  .avatar-preview {
+    flex-basis: 96px;
+    width: 96px;
+    height: 96px;
+  }
+  .avatar-options {
+    gap: 5px;
+  }
+  .avatar-row {
+    gap: 8px;
+  }
+  .sensitivity-row {
+    margin-top: 6px;
+    padding: 5px 10px;
+  }
+  .swatch {
+    width: 18px;
+    height: 18px;
+  }
+  .device-line {
+    margin-top: 8px;
+  }
+  .controls {
+    margin: 10px 0 6px;
+    padding: 10px;
+    gap: 6px 10px;
+  }
+  .tiny {
+    display: none;
+  }
+  .error {
+    min-height: 0;
+  }
+}
+
+/* ------------------------------------------------------------- sensitivity */
+
+.sensitivity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 520px;
+  margin: 10px auto 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: left;
+}
+
+.sensitivity-row label {
+  flex: 0 0 34px;
+  width: 34px;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sensitivity-row output {
+  flex: 0 0 52px;
+  width: 52px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Range input, restyled to the lobby's flat panels on both rendering engines. */
+.sensitivity-row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.sensitivity-row input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.75), rgba(120, 150, 190, 0.35));
+}
+
+.sensitivity-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.5);
+}
+
+.sensitivity-row input[type='range']::-moz-range-track {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(255, 209, 102, 0.75), rgba(120, 150, 190, 0.35));
+}
+
+.sensitivity-row input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sensitivity-row input[type='range']:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* ------------------------------------------------------- device indicator */
+
+.device-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.device-line .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hp);
+  box-shadow: 0 0 8px currentColor;
+}
+
+.device-hint {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: rgba(143, 163, 187, 0.65);
+}
+
+/* --------------------------------------------------------- touch controls */
+
+#touch {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Drag anywhere that is not a control to look around. */
+#look-zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#stick-zone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 46%;
+  height: 58%;
+  max-width: 300px;
+  max-height: 340px;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 0 calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#stick-base {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  border: 1px solid rgba(140, 170, 210, 0.3);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 170, 210, 0.13), rgba(140, 170, 210, 0.03));
+  transition: border-color 120ms;
+}
+
+#stick-base.active {
+  border-color: rgba(255, 209, 102, 0.6);
+}
+
+#stick-knob {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(223, 233, 245, 0.34);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.4);
+  transition: transform 40ms linear;
+  will-change: transform;
+}
+
+#touch-buttons {
+  --t: 62px;
+  position: absolute;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  width: 250px;
+  height: 284px;
+  pointer-events: none;
+}
+
+.tbtn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: var(--t);
+  height: var(--t);
+  padding: 0;
+  border: 1px solid rgba(160, 190, 225, 0.4);
+  border-radius: 50%;
+  background: rgba(12, 18, 28, 0.55);
+  color: rgba(223, 233, 245, 0.9);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: auto;
+  touch-action: none;
+  backdrop-filter: blur(2px);
+  transition: background 80ms, border-color 80ms, transform 80ms;
+}
+
+.tbtn.held,
+.tbtn:active {
+  background: rgba(255, 209, 102, 0.85);
+  border-color: var(--accent);
+  color: #16130a;
+  transform: scale(0.94);
+}
+
+.tbtn-fire {
+  right: 0;
+  bottom: 0;
+  width: 98px;
+  height: 98px;
+  font-size: 12px;
+  border-width: 2px;
+  background: rgba(255, 93, 108, 0.28);
+  border-color: rgba(255, 93, 108, 0.6);
+}
+
+.tbtn[data-act='jump'] {
+  right: 106px;
+  bottom: 0;
+}
+
+.tbtn[data-act='interact'] {
+  right: 106px;
+  bottom: 72px;
+}
+
+.tbtn[data-act='reload'] {
+  right: 180px;
+  bottom: 0;
+}
+
+.tbtn[data-act='slot1'] {
+  right: 180px;
+  bottom: 72px;
+}
+
+.tbtn[data-act='slot2'] {
+  right: 180px;
+  bottom: 144px;
+}
+
+.tbtn[data-act='slide'] {
+  right: 106px;
+  bottom: 144px;
+}
+
+.tbtn[data-act='slot3'] {
+  right: 180px;
+  bottom: 216px;
+}
+
+.tbtn[data-act='scope'] {
+  right: 0;
+  bottom: 216px;
+  width: 46px;
+  height: 46px;
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+.tbtn[data-act='pause'] {
+  right: 0;
+  bottom: 116px;
+  width: 46px;
+  height: 46px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Short screens (phone in landscape): shrink the cluster and pull the HUD in. */
+@media (max-height: 440px) {
+  #touch-buttons {
+    --t: 54px;
+    transform: scale(0.88);
+    transform-origin: 100% 100%;
+  }
+  #stick-base {
+    width: 110px;
+    height: 110px;
+  }
+  #stick-knob {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* HUD has to dodge the thumb zones while touch controls are up. */
+body.touch-on #vitals {
+  left: 14px;
+  bottom: 132px;
+  width: 168px;
+}
+
+body.touch-on #weapon-panel {
+  right: 14px;
+  bottom: 292px;
+  min-width: 140px;
+}
+
+body.touch-on #minimap {
+  top: 12px;
+  left: 12px;
+  width: 108px;
+  height: 108px;
+}
+
+body.touch-on #match-panel {
+  top: 12px;
+  right: 12px;
+  min-width: 128px;
+  padding: 8px 10px;
+}
+
+body.touch-on #prompt {
+  top: calc(50% + 46px);
+  font-size: 11px;
+}
+
+body.touch-on #toast {
+  bottom: 200px;
+}
+
+body.touch-on #killfeed {
+  top: 12px;
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .controls {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  #minimap {
+    width: 124px;
+    height: 124px;
+  }
+  #vitals {
+    width: 180px;
+  }
+}

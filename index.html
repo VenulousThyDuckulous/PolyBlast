@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b0f17" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>PolyBlast — a battle royale</title>
+    <!-- Relative paths throughout: the game is served from a subpath on GitHub Pages. -->
+    <link rel="stylesheet" href="./style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.js"
+        }
+      }
+    </script>
+    <meta name="polyblast-mode" content="offline" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- ---------------------------------------------------------------- HUD -->
+    <div id="hud" class="hidden">
+      <div id="crosshair">
+        <span class="ch-line ch-up"></span>
+        <span class="ch-line ch-down"></span>
+        <span class="ch-line ch-left"></span>
+        <span class="ch-line ch-right"></span>
+        <span class="ch-dot"></span>
+        <span id="hitmarker">
+          <span></span><span></span><span></span><span></span>
+        </span>
+      </div>
+
+      <!-- Scope overlay: a lens mask plus a reticle, shown only while the server says you are scoped. -->
+      <div id="scope" class="hidden">
+        <div class="scope-mask"></div>
+        <div class="scope-reticle">
+          <span class="sr-v"></span><span class="sr-h"></span><span class="sr-dot"></span>
+          <span class="sr-post sr-post-l"></span><span class="sr-post sr-post-r"></span>
+        </div>
+      </div>
+
+      <div id="vitals">
+        <div class="bar armor"><div id="armor-fill"></div></div>
+        <div class="bar health"><div id="hp-fill"></div></div>
+        <div class="bar stamina"><div id="stamina-fill"></div></div>
+        <div class="vitals-row">
+          <span id="hp-text">100</span>
+          <span class="vitals-label">HP</span>
+          <span id="kills-text">0 kills</span>
+        </div>
+      </div>
+
+      <div id="finisher-prompt" class="hidden">
+        <span class="finisher-tag">FINISH</span>
+        <span id="finisher-name"></span>
+      </div>
+
+      <div id="weapon-panel">
+        <div id="slots">
+          <div class="slot" data-slot="0"><span class="slot-key">1</span><span class="slot-name">—</span></div>
+          <div class="slot" data-slot="1"><span class="slot-key">2</span><span class="slot-name">—</span></div>
+          <div class="slot melee" data-slot="2"><span class="slot-key">3</span><span class="slot-name">KNIFE</span></div>
+        </div>
+        <div id="ammo">
+          <span id="ammo-mag">0</span><span id="ammo-sep">/</span><span id="ammo-reserve">0</span>
+        </div>
+        <div id="weapon-name">Unarmed</div>
+        <div id="reload-bar"><div id="reload-fill"></div></div>
+      </div>
+
+      <div id="match-panel">
+        <div class="panel-row"><span id="alive-count">0</span><span class="panel-label">alive</span></div>
+        <div class="panel-row zone-row">
+          <span id="zone-state">Waiting</span>
+          <span id="zone-timer">0s</span>
+        </div>
+        <div id="zone-hint" class="hidden">RUN TO THE CIRCLE</div>
+      </div>
+
+      <canvas id="minimap" width="180" height="180"></canvas>
+
+      <div id="prompt" class="hidden"><kbd id="prompt-key">E</kbd> <span id="prompt-text">Pick up</span></div>
+      <div id="toast"></div>
+      <div id="killfeed"></div>
+      <div id="banner" class="hidden"></div>
+      <div id="vignette"></div>
+      <div id="flash"></div>
+    </div>
+
+    <!-- ------------------------------------------------------------------ menu -->
+    <div id="lobby" class="screen">
+      <div class="lobby-inner">
+        <p class="eyebrow">One circle · no respawns · last one standing</p>
+        <h1>POLY<span>BLAST</span></h1>
+        <p class="tagline">
+          A low-poly battle royale. Drop in unarmed, scavenge a gun, and be the last one inside the circle.
+        </p>
+
+        <form id="join-form" autocomplete="off">
+          <label for="name-input">Callsign</label>
+          <div class="join-row">
+            <input id="name-input" maxlength="14" placeholder="Player" spellcheck="false" />
+            <button id="play-btn" type="submit">Drop in</button>
+          </div>
+        </form>
+        <p id="lobby-error" class="error"></p>
+
+        <div class="avatar-editor">
+          <div class="avatar-preview">
+            <canvas id="avatar-canvas" width="150" height="150"></canvas>
+          </div>
+          <div class="avatar-options">
+            <div class="avatar-row">
+              <span class="avatar-label">Body</span>
+              <div id="avatar-body" class="swatches"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label">Trim</span>
+              <div id="avatar-accent" class="swatches"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label">Hat</span>
+              <div id="avatar-hats" class="hats"></div>
+            </div>
+            <div class="avatar-row">
+              <span class="avatar-label"></span>
+              <button id="avatar-shuffle" class="ghost-btn" type="button">Shuffle</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sensitivity-row">
+          <label for="sensitivity-input">Camera</label>
+          <input
+            id="sensitivity-input"
+            type="range"
+            min="0.3"
+            max="3"
+            step="0.05"
+            value="1"
+            aria-label="Camera sensitivity"
+          />
+          <output id="sensitivity-value" for="sensitivity-input">1.00×</output>
+        </div>
+
+        <p id="device-line" class="device-line">
+          <span class="dot"></span><span id="device-name">Keyboard + mouse</span>
+          <span id="device-hint" class="device-hint"></span>
+        </p>
+
+        <div id="controls-kbm" class="controls">
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</div>
+          <div><kbd>Mouse</kbd> look</div>
+          <div><kbd>Click</kbd> fire</div>
+          <div><kbd>R</kbd> reload</div>
+          <div><kbd>E</kbd> pick up</div>
+          <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
+          <div><kbd>Shift</kbd> sprint</div>
+          <div><kbd>Ctrl</kbd>/<kbd>C</kbd> slide</div>
+          <div><kbd>RMB</kbd> scope (hold)</div>
+          <div><kbd>3</kbd> knife</div>
+          <div><kbd>Space</kbd> jump</div>
+        </div>
+
+        <div id="controls-pad" class="controls hidden">
+          <div><kbd>L stick</kbd> move</div>
+          <div><kbd>R stick</kbd> look</div>
+          <div><kbd>RT</kbd> fire</div>
+          <div><kbd>LT</kbd> sprint</div>
+          <div><kbd>Y</kbd> pick up</div>
+          <div><kbd>X</kbd> reload</div>
+          <div><kbd>LB</kbd> scope</div>
+          <div><kbd>RB</kbd> next weapon</div>
+          <div><kbd>D-pad ←→</kbd> guns</div>
+          <div><kbd>B</kbd>/<kbd>L3</kbd> slide</div>
+          <div><kbd>D-pad ↑</kbd> knife</div>
+          <div><kbd>A</kbd> jump</div>
+        </div>
+
+        <div id="controls-touch" class="controls hidden">
+          <div><kbd>Left thumb</kbd> move</div>
+          <div><kbd>Drag</kbd> look</div>
+          <div><kbd>FIRE</kbd> shoot</div>
+          <div><kbd>PICK</kbd> loot</div>
+          <div><kbd>RELOAD</kbd> reload</div>
+          <div><kbd>SLIDE</kbd> slide</div>
+          <div><kbd>SCOPE</kbd> scope</div>
+          <div><kbd>KNIFE</kbd> knife</div>
+          <div><kbd>JUMP</kbd> jump</div>
+          <div><kbd>1</kbd><kbd>2</kbd> weapons</div>
+          <div><kbd>II</kbd> pause</div>
+        </div>
+
+        <p class="tiny">Bots fill the lobby, so a solo drop still plays like a battle royale.</p>
+      </div>
+    </div>
+
+    <!-- --------------------------------------------------------------- overlays -->
+    <div id="paused" class="screen hidden">
+      <div class="lobby-inner compact">
+        <h2>Paused</h2>
+        <p class="tagline">The match keeps running. Get back in.</p>
+        <button id="resume-btn" type="button">Resume</button>
+      </div>
+    </div>
+
+    <div id="dead" class="overlay hidden">
+      <div class="dead-inner">
+        <p class="eyebrow">You were eliminated by</p>
+        <h2 id="dead-killer">—</h2>
+        <p id="dead-detail" class="tagline"></p>
+        <p class="tiny">Spectating · the next match starts automatically</p>
+      </div>
+    </div>
+
+    <div id="results" class="overlay hidden">
+      <div class="results-inner">
+        <p class="eyebrow" id="results-eyebrow">Match over</p>
+        <h2 id="winner-name">—</h2>
+        <p id="winner-detail" class="tagline"></p>
+      </div>
+    </div>
+
+    <div id="countdown" class="overlay hidden">
+      <span id="countdown-number">5</span>
+    </div>
+
+    <div id="connect-error" class="overlay hidden">
+      <div class="dead-inner">
+        <h2>Connection lost</h2>
+        <p id="connect-error-text" class="tagline">The server went away.</p>
+        <button id="reload-btn" type="button">Reconnect</button>
+      </div>
+    </div>
+
+    <!-- ----------------------------------------------------------- touch controls -->
+    <div id="touch" class="hidden">
+      <div id="look-zone"></div>
+      <div id="stick-zone">
+        <div id="stick-base"><div id="stick-knob"></div></div>
+      </div>
+      <div id="touch-buttons">
+        <button class="tbtn tbtn-fire" data-act="fire" aria-label="Fire">FIRE</button>
+        <button class="tbtn" data-act="jump" aria-label="Jump">JUMP</button>
+        <button class="tbtn" data-act="interact" aria-label="Pick up">PICK</button>
+        <button class="tbtn" data-act="reload" aria-label="Reload">RELOAD</button>
+        <button class="tbtn" data-act="slide" aria-label="Slide">SLIDE</button>
+        <button class="tbtn" data-act="slot1" aria-label="Weapon slot 1">1</button>
+        <button class="tbtn" data-act="slot2" aria-label="Weapon slot 2">2</button>
+        <button class="tbtn" data-act="slot3" aria-label="Knife">KNIFE</button>
+        <button class="tbtn" data-act="scope" aria-label="Scope">SCOPE</button>
+        <button class="tbtn" data-act="pause" aria-label="Pause">II</button>
+      </div>
+    </div>
+
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>
