@@ -12,6 +12,13 @@
 /** Radians of yaw per pixel dragged. Higher than mouse sensitivity: thumbs are less precise. */
 const LOOK_SENSITIVITY = 0.0042;
 
+/**
+ * A slide needs a moment of speed before the server will launch it, and a tapped button can be
+ * shorter than that moment. A slide press therefore keeps reporting "held" for this long after the
+ * finger lifts, so a quick tap still slides instead of doing nothing.
+ */
+const SLIDE_MIN_HOLD = 0.3;
+
 /** Pointer capture keeps a drag alive outside its element, but is not always available. */
 function capture(element, pointerId) {
   try {
@@ -34,6 +41,10 @@ export class TouchControls {
     this.jump = false;
     this.sprint = false;
     this.slide = false;
+    /** Finger is physically on the slide button. */
+    this.slideDown = false;
+    /** Seconds of minimum hold left after a slide press, so a tap still slides. */
+    this.slideHold = 0;
     this.scope = false;
     this.actions = { reload: false, interact: false, slot: 0, pause: false };
 
@@ -131,7 +142,11 @@ export class TouchControls {
         if (act === 'fire') this.fire = true;
         else if (act === 'jump') this.jump = true;
         else if (act === 'sprint') this.sprint = true;
-        else if (act === 'slide') this.slide = true;
+        else if (act === 'slide') {
+          this.slideDown = true;
+          this.slideHold = SLIDE_MIN_HOLD;
+          this.slide = true;
+        }
         else if (act === 'scope') this.scope = true;
         else if (act === 'reload') this.actions.reload = true;
         else if (act === 'interact') this.actions.interact = true;
@@ -146,7 +161,7 @@ export class TouchControls {
           if (act === 'fire') this.fire = false;
           else if (act === 'jump') this.jump = false;
           else if (act === 'sprint') this.sprint = false;
-          else if (act === 'slide') this.slide = false;
+          else if (act === 'slide') this.slideDown = false;
           else if (act === 'scope') this.scope = false;
         }
         button.classList.remove('held');
@@ -182,6 +197,15 @@ export class TouchControls {
     this.stickBase.classList.toggle('active', x !== 0 || y !== 0);
   }
 
+  /**
+   * Advance the timers that outlive a finger leaving a button. Driven once per frame by Input, so the
+   * minimum slide hold does not depend on how often the browser delivers pointer events.
+   */
+  tick(dt) {
+    if (this.slideHold > 0) this.slideHold = Math.max(0, this.slideHold - dt);
+    if (!this.slideDown) this.slide = this.slideHold > 0;
+  }
+
   /** Look movement accumulated since the last call, consumed by Input. */
   drainLook() {
     const out = { x: this.lookX, y: this.lookY };
@@ -203,6 +227,8 @@ export class TouchControls {
     this.jump = false;
     this.sprint = false;
     this.slide = false;
+    this.slideDown = false;
+    this.slideHold = 0;
     this.scope = false;
     this.stickPointer = null;
     this.lookPointer = null;

@@ -236,6 +236,30 @@ test('slides are capped in duration and cannot be chained', () => {
   assert.ok(p.slide, 'a fresh press slides again after the cooldown');
 });
 
+test('a slide will not launch from walking speed, only from a sprint', () => {
+  const match = makeLiveMatch(2);
+  const p = match.players.get('p0');
+  p.pos = { x: 0, y: 0, z: 40 };
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: false });
+  advance(match, 1);
+  const walkSpeed = Math.hypot(p.vel.x, p.vel.z);
+  assert.ok(
+    walkSpeed < PLAYER.slideMinSpeed,
+    `a walk (${walkSpeed.toFixed(2)}) must stay under slideMinSpeed (${PLAYER.slideMinSpeed})`,
+  );
+
+  // Holding slide at walking speed does nothing at all: this is what made the touch button feel
+  // broken, because the phone had no way to reach sprint speed.
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: false, slide: true });
+  advance(match, 0.1);
+  assert.equal(p.slide, null, 'no slide from a walk, however long the button is held');
+
+  // Sprinting on the same held button - which is what the touch screen now reports - launches it.
+  setInput(match, 'p0', { yaw: 0, pitch: 0, mx: 0, mz: 1, sprint: true, slide: true });
+  advance(match, 0.15);
+  assert.ok(p.slide, 'sprint plus slide launches');
+});
+
 test('the number keys select the slot they are labelled with', () => {
   const match = makeLiveMatch(2);
   const p = match.players.get('p0');

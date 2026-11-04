@@ -130,7 +130,7 @@ controller button hands it back to the controller — so the two never fight ove
 | Left thumb stick | Move |
 | Drag anywhere else | Look |
 | `FIRE` / `JUMP` / `RELOAD` / `PICK` | Actions |
-| `SLIDE` (hold) | Slide |
+| `SLIDE` (hold) | Slide - also sprints for you |
 | `SCOPE` (hold) | Scope in |
 | `1` `2` | Gun slots |
 | `KNIFE` | Knife |
@@ -152,6 +152,10 @@ so a held `Shift` cannot stutter between two speeds.
 camera drops with it, so shots aimed at a standing chest pass over your head. Firing ends the slide
 but keeps the speed, which is what makes slide-into-shooting feel good. Holding the key does **not**
 chain slides — release and press again.
+
+On a phone the `SLIDE` button sprints while you hold it: there is no room for a separate sprint
+button, and a slide cannot launch from walking speed, so the button supplies both. Even a quick tap
+counts as a 0.3 s hold, which is long enough for the stick to build the speed the slide needs.
 
 **The knife** lives in its own third slot and is always yours; it is never looted, never reloads and
 never runs dry. It hits for 58 inside 2.4 m with a 105 rpm swing, so it is a finisher, not a duelist's

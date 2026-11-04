@@ -232,6 +232,7 @@ export class Input {
    */
   update(dt) {
     this.syncTouchLayer();
+    this.touch.tick(dt);
 
     const pad = this.devices.pollPad(dt);
     this.pad = pad;
@@ -287,7 +288,10 @@ export class Input {
   }
 
   isSprinting() {
-    if (this.devices.usingTouch) return this.touch.sprint;
+    // A phone has no room for a separate sprint button, and a slide will not launch below sprint
+    // speed, so holding SLIDE sprints for you: the stick builds speed and the slide fires a frame or
+    // two later. Without this, touch players could never slide at all.
+    if (this.devices.usingTouch) return this.touch.sprint || this.touch.slide;
     if (this.devices.usingGamepad && this.pad) return this.pad.sprint;
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }
